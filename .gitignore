@@ -20,9 +20,11 @@ Thumbs.db
 .agent.lock
 .claude_settings.json
 
-# SQLite database (features)
+# SQLite database (features/assistant)
 features.db
 features.db-journal
+assistant.db
+assistant.db-journal
 
 # Temporary files
 *.tmp

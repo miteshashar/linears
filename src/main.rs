@@ -6,6 +6,8 @@
 //! - Discovery commands: resources, ops
 //! - Schema commands: info, diff, sync
 
+use std::process::ExitCode;
+
 use anyhow::Result;
 use clap::Parser;
 
@@ -19,57 +21,98 @@ mod validate;
 
 use cli::{Cli, Commands};
 
+/// Exit codes for the CLI
+/// - 0: Success
+/// - 1: General/unknown error
+/// - 2: Auth error (missing/invalid LINEAR_API_KEY)
+/// - 3: Network error (connection failed, timeout)
+/// - 4: GraphQL error (valid request, Linear returned errors)
+mod exit_codes {
+    pub const SUCCESS: u8 = 0;
+    pub const GENERAL_ERROR: u8 = 1;
+    pub const AUTH_ERROR: u8 = 2;
+    #[allow(dead_code)]
+    pub const NETWORK_ERROR: u8 = 3;
+    #[allow(dead_code)]
+    pub const GRAPHQL_ERROR: u8 = 4;
+}
+
+/// Check if the command requires API access
+fn command_requires_api(cmd: &Commands) -> bool {
+    match cmd {
+        // These commands don't require API access
+        Commands::Resources | Commands::Ops | Commands::Schema { .. } => false,
+        // All other commands require API access
+        _ => true,
+    }
+}
+
+/// Get the API key from environment, returning error message if missing or empty
+fn get_api_key() -> Result<String, String> {
+    match std::env::var("LINEAR_API_KEY") {
+        Ok(key) if key.trim().is_empty() => Err(
+            "LINEAR_API_KEY environment variable is empty.\n\
+             \n\
+             To use this command, set your Linear API key:\n\
+             \n\
+               export LINEAR_API_KEY='lin_api_...'\n\
+             \n\
+             Get your API key from: https://linear.app/settings/api"
+                .to_string(),
+        ),
+        Ok(key) => Ok(key),
+        Err(_) => Err(
+            "Missing LINEAR_API_KEY environment variable.\n\
+             \n\
+             To use this command, set your Linear API key:\n\
+             \n\
+               export LINEAR_API_KEY='lin_api_...'\n\
+             \n\
+             Get your API key from: https://linear.app/settings/api"
+                .to_string(),
+        ),
+    }
+}
+
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> ExitCode {
     // Load .env if present
     let _ = dotenvy::dotenv();
 
     let cli = Cli::parse();
 
-    // Handle commands
-    match cli.command {
-        Commands::Resources => {
-            cmd_resources(&cli)?;
-        }
-        Commands::Ops => {
-            cmd_ops(&cli)?;
-        }
-        Commands::List { resource, options } => {
-            cmd_list(&cli, resource, options).await?;
-        }
-        Commands::Get { resource, id } => {
-            cmd_get(&cli, resource, id).await?;
-        }
-        Commands::Search { resource, text } => {
-            cmd_search(&cli, resource, text).await?;
-        }
-        Commands::Raw { query } => {
-            cmd_raw(&cli, query).await?;
-        }
-        Commands::Create { resource, input } => {
-            cmd_create(&cli, resource, input).await?;
-        }
-        Commands::Update { resource, id, set } => {
-            cmd_update(&cli, resource, id, set).await?;
-        }
-        Commands::Delete { resource, id } => {
-            cmd_delete(&cli, resource, id).await?;
-        }
-        Commands::Archive { resource, id } => {
-            cmd_archive(&cli, resource, id).await?;
-        }
-        Commands::Unarchive { resource, id } => {
-            cmd_unarchive(&cli, resource, id).await?;
-        }
-        Commands::Mutate { op, vars } => {
-            cmd_mutate(&cli, op, vars).await?;
-        }
-        Commands::Schema { action } => {
-            cmd_schema(&cli, action)?;
+    // Check for API key if command requires it
+    if command_requires_api(&cli.command) {
+        if let Err(msg) = get_api_key() {
+            eprintln!("Error: {}", msg);
+            return ExitCode::from(exit_codes::AUTH_ERROR);
         }
     }
 
-    Ok(())
+    // Handle commands
+    let result: anyhow::Result<()> = match &cli.command {
+        Commands::Resources => cmd_resources(&cli),
+        Commands::Ops => cmd_ops(&cli),
+        Commands::List { resource, options } => cmd_list(&cli, resource.clone(), options.clone()).await,
+        Commands::Get { resource, id } => cmd_get(&cli, resource.clone(), id.clone()).await,
+        Commands::Search { resource, text } => cmd_search(&cli, resource.clone(), text.clone()).await,
+        Commands::Raw { query } => cmd_raw(&cli, query.clone()).await,
+        Commands::Create { resource, input } => cmd_create(&cli, resource.clone(), input.clone()).await,
+        Commands::Update { resource, id, set } => cmd_update(&cli, resource.clone(), id.clone(), set.clone()).await,
+        Commands::Delete { resource, id } => cmd_delete(&cli, resource.clone(), id.clone()).await,
+        Commands::Archive { resource, id } => cmd_archive(&cli, resource.clone(), id.clone()).await,
+        Commands::Unarchive { resource, id } => cmd_unarchive(&cli, resource.clone(), id.clone()).await,
+        Commands::Mutate { op, vars } => cmd_mutate(&cli, op.clone(), vars.clone()).await,
+        Commands::Schema { action } => cmd_schema(&cli, action.clone()),
+    };
+
+    match result {
+        Ok(()) => ExitCode::from(exit_codes::SUCCESS),
+        Err(e) => {
+            eprintln!("Error: {:#}", e);
+            ExitCode::from(exit_codes::GENERAL_ERROR)
+        }
+    }
 }
 
 fn cmd_resources(cli: &Cli) -> Result<()> {

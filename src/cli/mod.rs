@@ -169,7 +169,7 @@ pub enum Commands {
 }
 
 /// List command options
-#[derive(Args)]
+#[derive(Args, Clone)]
 pub struct ListOptions {
     /// Limit results (forward pagination)
     #[arg(long, default_value = "20")]
@@ -232,7 +232,7 @@ pub enum Preset {
 }
 
 /// Input options for create command
-#[derive(Args)]
+#[derive(Args, Clone)]
 pub struct InputOptions {
     /// Inline input (JSON or YAML, use '-' for stdin)
     #[arg(long)]
@@ -244,7 +244,7 @@ pub struct InputOptions {
 }
 
 /// Set options for update command
-#[derive(Args)]
+#[derive(Args, Clone)]
 pub struct SetOptions {
     /// Inline update data (JSON or YAML, use '-' for stdin)
     #[arg(long)]
@@ -256,7 +256,7 @@ pub struct SetOptions {
 }
 
 /// Variables options for mutate command
-#[derive(Args)]
+#[derive(Args, Clone)]
 pub struct VarsOptions {
     /// Inline variables (JSON or YAML, use '-' for stdin)
     #[arg(long)]
@@ -272,7 +272,7 @@ pub struct VarsOptions {
 }
 
 /// Schema management actions
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 pub enum SchemaAction {
     /// Display schema version information
     Info,
