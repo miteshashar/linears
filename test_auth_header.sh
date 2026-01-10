@@ -42,5 +42,17 @@ else
     exit 1
 fi
 
+# Test 4: API key should NOT appear in verbose output
+echo -n "Test 4: API key not exposed in verbose output... "
+secret_key="super-secret-key-xyz789"
+output=$(LINEAR_API_KEY="$secret_key" ./target/debug/linears -v --endpoint http://localhost:9999 list issue 2>&1) || true
+if echo "$output" | grep -q "$secret_key"; then
+    echo "FAIL (API key was exposed!)"
+    echo "Output: $output"
+    exit 1
+else
+    echo "PASS"
+fi
+
 echo ""
 echo "All Authorization header tests passed!"
