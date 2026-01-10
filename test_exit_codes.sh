@@ -79,6 +79,31 @@ else
     ((FAIL++))
 fi
 
+# Test 7: invalid API key returns exit code 2
+echo -n "Test 7: Invalid API key returns exit code 2... "
+output=$(LINEAR_API_KEY="invalid-key-12345" ./target/debug/linears list issue 2>&1)
+exit_code=$?
+if [ "$exit_code" -eq 2 ]; then
+    echo "PASS"
+    ((PASS++))
+else
+    echo "FAIL (expected 2, got $exit_code)"
+    echo "Output: $output"
+    ((FAIL++))
+fi
+
+# Test 8: invalid API key error message mentions authentication
+echo -n "Test 8: Invalid API key error mentions authentication... "
+output=$(LINEAR_API_KEY="invalid-key-12345" ./target/debug/linears list issue 2>&1)
+if echo "$output" | grep -qi "authentication\|unauthorized\|api key\|invalid"; then
+    echo "PASS"
+    ((PASS++))
+else
+    echo "FAIL (error doesn't mention authentication)"
+    echo "Output: $output"
+    ((FAIL++))
+fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 

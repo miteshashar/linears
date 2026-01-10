@@ -109,8 +109,15 @@ async fn main() -> ExitCode {
     match result {
         Ok(()) => ExitCode::from(exit_codes::SUCCESS),
         Err(e) => {
-            eprintln!("Error: {:#}", e);
-            ExitCode::from(exit_codes::GENERAL_ERROR)
+            // Check if the error is a ClientError to get the right exit code
+            let exit_code = if let Some(client_err) = e.downcast_ref::<client::ClientError>() {
+                eprintln!("Error: {}", client_err);
+                client_err.exit_code()
+            } else {
+                eprintln!("Error: {:#}", e);
+                exit_codes::GENERAL_ERROR
+            };
+            ExitCode::from(exit_code)
         }
     }
 }
@@ -188,12 +195,60 @@ fn cmd_ops(cli: &Cli) -> Result<()> {
 }
 
 async fn cmd_list(
-    _cli: &Cli,
-    _resource: generated::Resource,
-    _options: cli::ListOptions,
+    cli: &Cli,
+    resource: generated::Resource,
+    options: cli::ListOptions,
 ) -> Result<()> {
-    // TODO: Implement list command
-    anyhow::bail!("List command not yet implemented")
+    use client::{Client, GraphQLRequest};
+    use query_builder::build_list_query;
+
+    // Get API key (already validated in main)
+    let api_key = get_api_key().expect("API key already validated");
+
+    // Create client
+    let client = Client::new(
+        &api_key,
+        cli.global.endpoint.as_deref(),
+        cli.global.timeout,
+    )?;
+
+    // Build the query
+    let (query, variables) = build_list_query(resource, &options);
+
+    if cli.global.verbose {
+        eprintln!("Query: {}", query);
+        eprintln!("Variables: {}", serde_json::to_string_pretty(&variables)?);
+    }
+
+    // Execute the query
+    let request = GraphQLRequest {
+        query,
+        variables: Some(variables),
+        operation_name: None,
+    };
+
+    let response = client.execute(request).await?;
+
+    // Render the response
+    match cli.global.output {
+        cli::OutputFormat::Json => {
+            if cli.global.pretty {
+                println!("{}", serde_json::to_string_pretty(&response.data)?);
+            } else {
+                println!("{}", serde_json::to_string(&response.data)?);
+            }
+        }
+        cli::OutputFormat::Yaml => {
+            println!("{}", serde_yaml::to_string(&response.data)?);
+        }
+        _ => {
+            // For table/text/ndjson, just print JSON for now
+            // TODO: Implement proper table rendering
+            println!("{}", serde_json::to_string_pretty(&response.data)?);
+        }
+    }
+
+    Ok(())
 }
 
 async fn cmd_get(_cli: &Cli, _resource: generated::Resource, _id: String) -> Result<()> {

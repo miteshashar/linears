@@ -6,8 +6,11 @@ use crate::generated::Resource;
 /// Build a list query for a resource
 pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, serde_json::Value) {
     let field_name = resource.field_name();
+    let plural_name = plural_field_name(field_name);
 
-    // Build the query based on whether this is a connection (plural) or single
+    // Get fields for this specific resource type
+    let node_fields = get_resource_fields(resource);
+
     let query = format!(
         r#"query List{resource}($first: Int, $after: String, $last: Int, $before: String) {{
   {field}(first: $first, after: $after, last: $last, before: $before) {{
@@ -18,19 +21,13 @@ pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, s
       endCursor
     }}
     nodes {{
-      id
-      ... on Issue {{ title identifier state {{ name }} }}
-      ... on Team {{ name key }}
-      ... on User {{ name email }}
-      ... on Project {{ name state }}
-      ... on Cycle {{ name number startsAt endsAt }}
-      ... on IssueLabel {{ name color }}
-      ... on Comment {{ body createdAt }}
+      {node_fields}
     }}
   }}
 }}"#,
         resource = to_pascal_case(field_name),
-        field = plural_field_name(field_name),
+        field = plural_name,
+        node_fields = node_fields,
     );
 
     let variables = serde_json::json!({
@@ -41,6 +38,31 @@ pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, s
     });
 
     (query, variables)
+}
+
+/// Get the fields to select for a resource type
+fn get_resource_fields(resource: Resource) -> &'static str {
+    match resource {
+        Resource::Issue => "id title identifier priority createdAt state { name }",
+        Resource::Team => "id name key description",
+        Resource::User => "id name email active",
+        Resource::Project => "id name state startDate targetDate",
+        Resource::Cycle => "id name number startsAt endsAt",
+        Resource::IssueLabel => "id name color",
+        Resource::Comment => "id body createdAt",
+        Resource::Workflow => "id name",
+        Resource::WorkflowState => "id name color type",
+        Resource::Attachment => "id title url",
+        Resource::Document => "id title createdAt",
+        Resource::Roadmap => "id name",
+        Resource::Initiative => "id name",
+        Resource::Integration => "id service",
+        Resource::Notification => "id type createdAt",
+        Resource::Webhook => "id url enabled",
+        Resource::ApiKey => "id label createdAt",
+        Resource::Viewer => "id name email",
+        Resource::Organization => "id name urlKey",
+    }
 }
 
 /// Build a get query for a single entity
