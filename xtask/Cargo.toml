@@ -1,0 +1,30 @@
+[package]
+name = "xtask"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+publish = false
+
+[dependencies]
+# CLI for xtask commands
+clap = { version = "4", features = ["derive"] }
+
+# HTTP for schema fetching
+reqwest = { version = "0.12", features = ["blocking", "rustls-tls"], default-features = false }
+
+# GraphQL schema parsing
+graphql-parser = "0.4"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# File operations
+walkdir = "2"
+
+# Error handling
+anyhow = "1"
+
+# Code generation
+quote = "1"
+proc-macro2 = "1"

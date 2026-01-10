@@ -1,0 +1,60 @@
+[workspace]
+members = [".", "xtask"]
+resolver = "2"
+
+[package]
+name = "linears"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description = "A CLI for Linear's GraphQL API"
+license = "MIT"
+repository = "https://github.com/example/linears"
+keywords = ["linear", "cli", "graphql", "project-management"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+# CLI framework
+clap = { version = "4", features = ["derive", "env", "wrap_help"] }
+
+# Async runtime
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Table rendering
+tabled = "0.17"
+
+# Date formatting
+chrono = { version = "0.4", features = ["serde"] }
+chrono-humanize = "0.2"
+
+# Progress indicators
+indicatif = "0.17"
+
+# Terminal colors
+owo-colors = "4"
+
+# Environment
+dotenvy = "0.15"
+
+[dev-dependencies]
+# Testing
+tokio-test = "0.4"
+wiremock = "0.6"
+insta = { version = "1", features = ["yaml"] }
+
+[profile.release]
+lto = true
+strip = true
+codegen-units = 1

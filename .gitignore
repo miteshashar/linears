@@ -1,0 +1,29 @@
+# Rust build artifacts
+/target/
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Agent/session files
+.agent.lock
+.claude_settings.json
+
+# SQLite database (features)
+features.db
+features.db-journal
+
+# Temporary files
+*.tmp
+*.temp

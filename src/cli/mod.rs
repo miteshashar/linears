@@ -1,0 +1,283 @@
+//! CLI command definitions using clap
+
+use clap::{Args, Parser, Subcommand, ValueEnum};
+
+use crate::generated::{MutationOp, Resource};
+
+/// A CLI for Linear's GraphQL API
+#[derive(Parser)]
+#[command(name = "linears")]
+#[command(version)]
+#[command(about = "Complete CLI coverage of Linear's GraphQL API")]
+#[command(long_about = None)]
+pub struct Cli {
+    #[command(flatten)]
+    pub global: GlobalOptions,
+
+    #[command(subcommand)]
+    pub command: Commands,
+}
+
+/// Global options available to all commands
+#[derive(Args)]
+pub struct GlobalOptions {
+    /// Output format
+    #[arg(long = "out", value_enum, default_value = "table", env = "LINEARS_OUTPUT")]
+    pub output: OutputFormat,
+
+    /// Pretty-print JSON/YAML output
+    #[arg(long)]
+    pub pretty: bool,
+
+    /// Disable colored output
+    #[arg(long)]
+    pub no_color: bool,
+
+    /// Show GraphQL query being sent
+    #[arg(short, long)]
+    pub verbose: bool,
+
+    /// Override API endpoint
+    #[arg(long, env = "LINEAR_ENDPOINT")]
+    pub endpoint: Option<String>,
+
+    /// Request timeout in seconds
+    #[arg(long, default_value = "30")]
+    pub timeout: u64,
+}
+
+/// Output format options
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum OutputFormat {
+    /// JSON output
+    Json,
+    /// YAML output
+    Yaml,
+    /// Table output (default)
+    Table,
+    /// Human-readable text for single entities
+    Text,
+    /// Newline-delimited JSON (one object per line)
+    Ndjson,
+}
+
+/// Available commands
+#[derive(Subcommand)]
+pub enum Commands {
+    /// List all available query resources
+    Resources,
+
+    /// List all available mutation operations
+    Ops,
+
+    /// List entities with pagination and filtering
+    List {
+        /// The resource type to list
+        resource: Resource,
+
+        #[command(flatten)]
+        options: ListOptions,
+    },
+
+    /// Get a single entity by ID or identifier
+    Get {
+        /// The resource type
+        resource: Resource,
+
+        /// Entity ID (UUID) or identifier (e.g., ENG-123)
+        id: String,
+    },
+
+    /// Search entities with smart search strategy
+    Search {
+        /// The resource type to search
+        resource: Resource,
+
+        /// Search text
+        text: String,
+    },
+
+    /// Execute arbitrary GraphQL query
+    Raw {
+        /// GraphQL query (inline or file path)
+        #[arg(long)]
+        query: String,
+    },
+
+    /// Create a new entity
+    Create {
+        /// The resource type to create
+        resource: Resource,
+
+        #[command(flatten)]
+        input: InputOptions,
+    },
+
+    /// Update an existing entity
+    Update {
+        /// The resource type to update
+        resource: Resource,
+
+        /// Entity ID or identifier
+        id: String,
+
+        #[command(flatten)]
+        set: SetOptions,
+    },
+
+    /// Delete an entity
+    Delete {
+        /// The resource type to delete
+        resource: Resource,
+
+        /// Entity ID or identifier
+        id: String,
+    },
+
+    /// Archive an entity
+    Archive {
+        /// The resource type to archive
+        resource: Resource,
+
+        /// Entity ID or identifier
+        id: String,
+    },
+
+    /// Unarchive an entity
+    Unarchive {
+        /// The resource type to unarchive
+        resource: Resource,
+
+        /// Entity ID or identifier
+        id: String,
+    },
+
+    /// Execute any mutation operation
+    Mutate {
+        /// The mutation operation to execute
+        op: MutationOp,
+
+        #[command(flatten)]
+        vars: VarsOptions,
+    },
+
+    /// Schema management commands
+    Schema {
+        #[command(subcommand)]
+        action: SchemaAction,
+    },
+}
+
+/// List command options
+#[derive(Args)]
+pub struct ListOptions {
+    /// Limit results (forward pagination)
+    #[arg(long, default_value = "20")]
+    pub first: Option<i32>,
+
+    /// Pagination cursor (forward)
+    #[arg(long)]
+    pub after: Option<String>,
+
+    /// Limit results (backward pagination)
+    #[arg(long)]
+    pub last: Option<i32>,
+
+    /// Pagination cursor (backward)
+    #[arg(long)]
+    pub before: Option<String>,
+
+    /// Auto-paginate all results (max 1000)
+    #[arg(long)]
+    pub all: bool,
+
+    /// Include archived entities
+    #[arg(long)]
+    pub include_archived: bool,
+
+    /// Sort order
+    #[arg(long)]
+    pub order_by: Option<String>,
+
+    /// Inline filter expression (JSON or YAML)
+    #[arg(long)]
+    pub filter: Option<String>,
+
+    /// Filter from file
+    #[arg(long)]
+    pub filter_file: Option<String>,
+
+    /// Field selection preset
+    #[arg(long, value_enum, default_value = "default")]
+    pub preset: Preset,
+
+    /// Comma-separated scalar fields to select
+    #[arg(long)]
+    pub select: Option<String>,
+
+    /// Relation expansion (relation[:fields])
+    #[arg(long)]
+    pub expand: Option<Vec<String>>,
+}
+
+/// Field selection presets
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum Preset {
+    /// Minimal fields (id, name/title)
+    Minimal,
+    /// Default fields
+    Default,
+    /// Wide field selection
+    Wide,
+}
+
+/// Input options for create command
+#[derive(Args)]
+pub struct InputOptions {
+    /// Inline input (JSON or YAML, use '-' for stdin)
+    #[arg(long)]
+    pub input: Option<String>,
+
+    /// Input from file
+    #[arg(long)]
+    pub input_file: Option<String>,
+}
+
+/// Set options for update command
+#[derive(Args)]
+pub struct SetOptions {
+    /// Inline update data (JSON or YAML, use '-' for stdin)
+    #[arg(long)]
+    pub set: Option<String>,
+
+    /// Update data from file
+    #[arg(long)]
+    pub set_file: Option<String>,
+}
+
+/// Variables options for mutate command
+#[derive(Args)]
+pub struct VarsOptions {
+    /// Inline variables (JSON or YAML, use '-' for stdin)
+    #[arg(long)]
+    pub vars: Option<String>,
+
+    /// Variables from file
+    #[arg(long)]
+    pub vars_file: Option<String>,
+
+    /// Individual variable override (key=value)
+    #[arg(long = "var")]
+    pub var: Option<Vec<String>>,
+}
+
+/// Schema management actions
+#[derive(Subcommand)]
+pub enum SchemaAction {
+    /// Display schema version information
+    Info,
+    /// Show diff between local and upstream schema
+    Diff,
+    /// Sync schema from Linear (maintainers)
+    Sync,
+}
