@@ -1209,10 +1209,7 @@ pub fn get_mutation_result_fields(resource_name: &str) -> &'static str {
     for (field_name, type_name) in &entity_types {
         // Use minimal field set for mutations - just key identifying fields
         let fields = get_minimal_entity_fields(type_name, &type_fields);
-        code.push_str(&format!(
-            "        \"{}\" => \"{}\",\n",
-            field_name, fields
-        ));
+        code.push_str(&format!("        \"{}\" => \"{}\",\n", field_name, fields));
     }
 
     code.push_str(
@@ -1238,18 +1235,31 @@ pub fn mutation_returns_entity(op: MutationOp) -> bool {
 }
 
 /// Get minimal entity fields for mutation results
-fn get_minimal_entity_fields(type_name: &str, type_fields: &HashMap<String, Vec<(String, String)>>) -> String {
+fn get_minimal_entity_fields(
+    type_name: &str,
+    type_fields: &HashMap<String, Vec<(String, String)>>,
+) -> String {
     let mut result = vec!["id".to_string()];
 
     // Name-like fields in order of preference
-    let name_fields = ["identifier", "title", "name", "key", "number", "url", "body", "email"];
+    let name_fields = [
+        "identifier",
+        "title",
+        "name",
+        "key",
+        "number",
+        "url",
+        "body",
+        "email",
+    ];
 
     if let Some(fields) = type_fields.get(type_name) {
         // Find first name-like field that exists and is scalar
         for name_field in name_fields {
-            if fields.iter().any(|(name, type_name)| {
-                name == name_field && is_scalar_type(type_name)
-            }) {
+            if fields
+                .iter()
+                .any(|(name, type_name)| name == name_field && is_scalar_type(type_name))
+            {
                 result.push(name_field.to_string());
                 break;
             }
@@ -1257,7 +1267,10 @@ fn get_minimal_entity_fields(type_name: &str, type_fields: &HashMap<String, Vec<
 
         // Also add a second identifier if present (like title for issues)
         if result.len() == 2 && result[1] == "identifier" {
-            if fields.iter().any(|(name, type_name)| name == "title" && is_scalar_type(type_name)) {
+            if fields
+                .iter()
+                .any(|(name, type_name)| name == "title" && is_scalar_type(type_name))
+            {
                 result.push("title".to_string());
             }
         }
