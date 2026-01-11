@@ -145,118 +145,20 @@ async fn main() -> ExitCode {
                     (exit_codes::GENERAL_ERROR, "general", format!("{:#}", e), None, None, None)
                 };
 
-            // Render error based on output format
-            match cli.global.output {
-                cli::OutputFormat::Json => {
-                    let mut error_obj = serde_json::json!({
-                        "kind": error_kind,
-                        "message": error_message,
-                    });
-
-                    // Add optional fields per PRD spec
-                    if let Some(h) = hint {
-                        error_obj["hint"] = serde_json::json!(h);
-                    }
-                    if let Some(d) = &details {
-                        error_obj["details"] = d.clone();
-                    }
-
-                    let mut output = serde_json::json!({ "error": error_obj });
-
-                    // Add graphqlErrors array if present
-                    if let Some(errors) = &graphql_errors {
-                        output["graphqlErrors"] = serde_json::to_value(errors).unwrap_or_default();
-                    }
-
-                    eprintln!(
-                        "{}",
-                        if cli.global.pretty {
-                            serde_json::to_string_pretty(&output).unwrap_or_default()
-                        } else {
-                            serde_json::to_string(&output).unwrap_or_default()
-                        }
-                    );
-                }
-                cli::OutputFormat::Yaml => {
-                    let mut error_obj = serde_json::json!({
-                        "kind": error_kind,
-                        "message": error_message,
-                    });
-
-                    if let Some(h) = hint {
-                        error_obj["hint"] = serde_json::json!(h);
-                    }
-                    if let Some(d) = &details {
-                        error_obj["details"] = d.clone();
-                    }
-
-                    let mut output = serde_json::json!({ "error": error_obj });
-
-                    if let Some(errors) = &graphql_errors {
-                        output["graphqlErrors"] = serde_json::to_value(errors).unwrap_or_default();
-                    }
-
-                    eprintln!("{}", serde_yaml::to_string(&output).unwrap_or_default());
-                }
-                _ => {
-                    eprintln!("Error: {}", error_message);
-                    if let Some(h) = hint {
-                        eprintln!("Hint: {}", h);
-                    }
-                }
-            }
+            // Render error using render module
+            let error_info = render::ErrorInfo {
+                kind: error_kind,
+                message: &error_message,
+                hint: hint.as_deref(),
+                details: details.as_ref(),
+                graphql_errors: graphql_errors.as_ref(),
+            };
+            eprintln!(
+                "{}",
+                render::render_error(cli.global.output, &error_info, cli.global.pretty)
+            );
             ExitCode::from(exit_code)
         }
-    }
-}
-
-/// Format a JSON value for table display
-/// Handles datetime fields with relative time formatting
-fn format_value_for_table(value: Option<&serde_json::Value>, field_name: &str) -> String {
-    use chrono::{DateTime, Utc};
-    use chrono_humanize::HumanTime;
-
-    match value {
-        Some(serde_json::Value::String(s)) => {
-            // Check if this looks like a datetime field and try to parse it
-            let is_datetime_field = field_name.ends_with("At")
-                || field_name.ends_with("_at")
-                || field_name == "createdAt"
-                || field_name == "updatedAt"
-                || field_name == "archivedAt"
-                || field_name == "startedAt"
-                || field_name == "completedAt"
-                || field_name == "canceledAt"
-                || field_name == "dueDate";
-
-            if is_datetime_field {
-                // Try to parse as ISO 8601 datetime
-                if let Ok(dt) = s.parse::<DateTime<Utc>>() {
-                    let age = Utc::now().signed_duration_since(dt);
-                    // Use relative for recent dates (< 7 days)
-                    if age.num_days().abs() < 7 {
-                        return HumanTime::from(dt).to_string();
-                    } else {
-                        return dt.format("%b %d, %Y").to_string();
-                    }
-                }
-            }
-            s.clone()
-        }
-        Some(serde_json::Value::Number(n)) => n.to_string(),
-        Some(serde_json::Value::Bool(b)) => b.to_string(),
-        Some(serde_json::Value::Null) => "-".to_string(),
-        Some(serde_json::Value::Object(o)) => {
-            // For nested objects, try to get a display field
-            o.get("name")
-                .or_else(|| o.get("key"))
-                .or_else(|| o.get("id"))
-                .and_then(|v| v.as_str())
-                .map(String::from)
-                .unwrap_or_else(|| "[object]".to_string())
-        }
-        Some(serde_json::Value::Array(_)) => "[array]".to_string(),
-        None => "-".to_string(),
     }
 }
 
@@ -264,34 +166,12 @@ fn cmd_resources(cli: &Cli) -> Result<()> {
     use generated::Resource;
 
     let resources = Resource::all();
+    let resource_names: Vec<&str> = resources.iter().map(|r| r.field_name()).collect();
 
-    match cli.global.output {
-        cli::OutputFormat::Json => {
-            let output = serde_json::json!({
-                "resources": resources.iter().map(|r| r.field_name()).collect::<Vec<_>>(),
-                "count": resources.len()
-            });
-            if cli.global.pretty {
-                println!("{}", serde_json::to_string_pretty(&output)?);
-            } else {
-                println!("{}", serde_json::to_string(&output)?);
-            }
-        }
-        cli::OutputFormat::Yaml => {
-            let output = serde_json::json!({
-                "resources": resources.iter().map(|r| r.field_name()).collect::<Vec<_>>(),
-                "count": resources.len()
-            });
-            println!("{}", serde_yaml::to_string(&output)?);
-        }
-        _ => {
-            println!("Available Resources ({}):", resources.len());
-            println!();
-            for resource in resources {
-                println!("  {}", resource.field_name());
-            }
-        }
-    }
+    println!(
+        "{}",
+        render::render_resources(cli.global.output, &resource_names, cli.global.pretty)
+    );
 
     Ok(())
 }
@@ -300,34 +180,12 @@ fn cmd_ops(cli: &Cli) -> Result<()> {
     use generated::MutationOp;
 
     let ops = MutationOp::all();
+    let op_names: Vec<&str> = ops.iter().map(|o| o.operation_name()).collect();
 
-    match cli.global.output {
-        cli::OutputFormat::Json => {
-            let output = serde_json::json!({
-                "operations": ops.iter().map(|o| o.operation_name()).collect::<Vec<_>>(),
-                "count": ops.len()
-            });
-            if cli.global.pretty {
-                println!("{}", serde_json::to_string_pretty(&output)?);
-            } else {
-                println!("{}", serde_json::to_string(&output)?);
-            }
-        }
-        cli::OutputFormat::Yaml => {
-            let output = serde_json::json!({
-                "operations": ops.iter().map(|o| o.operation_name()).collect::<Vec<_>>(),
-                "count": ops.len()
-            });
-            println!("{}", serde_yaml::to_string(&output)?);
-        }
-        _ => {
-            println!("Available Mutation Operations ({}):", ops.len());
-            println!();
-            for op in ops {
-                println!("  {}", op.operation_name());
-            }
-        }
-    }
+    println!(
+        "{}",
+        render::render_ops(cli.global.output, &op_names, cli.global.pretty)
+    );
 
     Ok(())
 }
@@ -480,70 +338,17 @@ async fn cmd_list(
         (nodes, page_info)
     };
 
-    // Render the response with proper envelope
-    match cli.global.output {
-        cli::OutputFormat::Json => {
-            let output = serde_json::json!({
-                "resource": resource_name,
-                "operation": "list",
-                "pageInfo": page_info,
-                "nodes": nodes,
-            });
-            if cli.global.pretty {
-                println!("{}", serde_json::to_string_pretty(&output)?);
-            } else {
-                println!("{}", serde_json::to_string(&output)?);
-            }
-        }
-        cli::OutputFormat::Yaml => {
-            let output = serde_json::json!({
-                "resource": resource_name,
-                "operation": "list",
-                "pageInfo": page_info,
-                "nodes": nodes,
-            });
-            println!("{}", serde_yaml::to_string(&output)?);
-        }
-        cli::OutputFormat::Ndjson => {
-            if let Some(arr) = nodes.as_array() {
-                for node in arr {
-                    println!("{}", serde_json::to_string(node)?);
-                }
-            }
-        }
-        cli::OutputFormat::Table | cli::OutputFormat::Text => {
-            // Render as table
-            if let Some(arr) = nodes.as_array() {
-                if arr.is_empty() {
-                    println!("No results found");
-                } else {
-                    // Extract keys from first item for headers
-                    if let Some(first) = arr.first() {
-                        if let Some(obj) = first.as_object() {
-                            let headers: Vec<&str> = obj.keys().map(|s| s.as_str()).collect();
-
-                            // Print header row
-                            let header_line: Vec<String> = headers.iter().map(|h| h.to_uppercase()).collect();
-                            println!("{}", header_line.join("\t"));
-
-                            // Print separator
-                            println!("{}", headers.iter().map(|h| "-".repeat(h.len().max(10))).collect::<Vec<_>>().join("\t"));
-
-                            // Print data rows
-                            for item in arr {
-                                if let Some(item_obj) = item.as_object() {
-                                    let row: Vec<String> = headers.iter().map(|h| {
-                                        format_value_for_table(item_obj.get(*h), h)
-                                    }).collect();
-                                    println!("{}", row.join("\t"));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+    // Render the response using render module
+    println!(
+        "{}",
+        render::render_list_json(
+            cli.global.output,
+            resource_name,
+            &nodes,
+            page_info.as_ref(),
+            cli.global.pretty
+        )
+    );
 
     Ok(())
 }
@@ -590,36 +395,11 @@ async fn cmd_get(cli: &Cli, resource: generated::Resource, id: String) -> Result
     let resource_name = resource.field_name();
     let entity = data.get(resource_name).cloned().unwrap_or_default();
 
-    // Render the response with proper envelope
-    match cli.global.output {
-        cli::OutputFormat::Json => {
-            let output = serde_json::json!({
-                "resource": resource_name,
-                "operation": "get",
-                "entity": entity,
-            });
-            if cli.global.pretty {
-                println!("{}", serde_json::to_string_pretty(&output)?);
-            } else {
-                println!("{}", serde_json::to_string(&output)?);
-            }
-        }
-        cli::OutputFormat::Yaml => {
-            let output = serde_json::json!({
-                "resource": resource_name,
-                "operation": "get",
-                "entity": entity,
-            });
-            println!("{}", serde_yaml::to_string(&output)?);
-        }
-        cli::OutputFormat::Ndjson => {
-            println!("{}", serde_json::to_string(&entity)?);
-        }
-        _ => {
-            // For table/text, just print YAML for readability
-            println!("{}", serde_yaml::to_string(&entity)?);
-        }
-    }
+    // Render the response using render module
+    println!(
+        "{}",
+        render::render_entity_json(cli.global.output, resource_name, &entity, cli.global.pretty)
+    );
 
     Ok(())
 }
@@ -670,48 +450,17 @@ async fn cmd_search(cli: &Cli, resource: generated::Resource, text: String) -> R
     let resource_data = &data[plural_name];
     let nodes = resource_data.get("nodes").cloned().unwrap_or_default();
 
-    // Render the response with proper envelope
-    match cli.global.output {
-        cli::OutputFormat::Json => {
-            let output = serde_json::json!({
-                "resource": resource_name,
-                "operation": "search",
-                "strategy": strategy.as_str(),
-                "nodes": nodes,
-            });
-            if cli.global.pretty {
-                println!("{}", serde_json::to_string_pretty(&output)?);
-            } else {
-                println!("{}", serde_json::to_string(&output)?);
-            }
-        }
-        cli::OutputFormat::Yaml => {
-            let output = serde_json::json!({
-                "resource": resource_name,
-                "operation": "search",
-                "strategy": strategy.as_str(),
-                "nodes": nodes,
-            });
-            println!("{}", serde_yaml::to_string(&output)?);
-        }
-        cli::OutputFormat::Ndjson => {
-            if let Some(arr) = nodes.as_array() {
-                for node in arr {
-                    println!("{}", serde_json::to_string(node)?);
-                }
-            }
-        }
-        _ => {
-            // For table/text, just print JSON for now
-            let output = serde_json::json!({
-                "resource": resource_name,
-                "operation": "search",
-                "strategy": strategy.as_str(),
-                "nodes": nodes,
-            });
-            println!("{}", serde_json::to_string_pretty(&output)?);
-        }
-    }
+    // Render the response using render module
+    println!(
+        "{}",
+        render::render_search_json(
+            cli.global.output,
+            resource_name,
+            strategy.as_str(),
+            &nodes,
+            cli.global.pretty
+        )
+    );
 
     Ok(())
 }
@@ -780,22 +529,11 @@ async fn cmd_raw(cli: &Cli, query: String, vars: cli::VarsOptions) -> Result<()>
 
     let response = with_spinner("Executing query...", client.execute(request)).await?;
 
-    // Render the response
-    match cli.global.output {
-        cli::OutputFormat::Json => {
-            if cli.global.pretty {
-                println!("{}", serde_json::to_string_pretty(&response.data)?);
-            } else {
-                println!("{}", serde_json::to_string(&response.data)?);
-            }
-        }
-        cli::OutputFormat::Yaml => {
-            println!("{}", serde_yaml::to_string(&response.data)?);
-        }
-        _ => {
-            println!("{}", serde_json::to_string_pretty(&response.data)?);
-        }
-    }
+    // Render the response using render module
+    println!(
+        "{}",
+        render::render_raw(cli.global.output, &response.data, cli.global.pretty)
+    );
 
     Ok(())
 }
@@ -845,22 +583,11 @@ async fn cmd_create(
     )
     .await?;
 
-    // Render the response
-    match cli.global.output {
-        cli::OutputFormat::Json => {
-            if cli.global.pretty {
-                println!("{}", serde_json::to_string_pretty(&response.data)?);
-            } else {
-                println!("{}", serde_json::to_string(&response.data)?);
-            }
-        }
-        cli::OutputFormat::Yaml => {
-            println!("{}", serde_yaml::to_string(&response.data)?);
-        }
-        _ => {
-            println!("{}", serde_json::to_string_pretty(&response.data)?);
-        }
-    }
+    // Render the response using render module
+    println!(
+        "{}",
+        render::render_helper_mutation(cli.global.output, &response.data, cli.global.pretty)
+    );
 
     Ok(())
 }
@@ -911,22 +638,11 @@ async fn cmd_update(
     )
     .await?;
 
-    // Render the response
-    match cli.global.output {
-        cli::OutputFormat::Json => {
-            if cli.global.pretty {
-                println!("{}", serde_json::to_string_pretty(&response.data)?);
-            } else {
-                println!("{}", serde_json::to_string(&response.data)?);
-            }
-        }
-        cli::OutputFormat::Yaml => {
-            println!("{}", serde_yaml::to_string(&response.data)?);
-        }
-        _ => {
-            println!("{}", serde_json::to_string_pretty(&response.data)?);
-        }
-    }
+    // Render the response using render module
+    println!(
+        "{}",
+        render::render_helper_mutation(cli.global.output, &response.data, cli.global.pretty)
+    );
 
     Ok(())
 }
@@ -968,22 +684,11 @@ async fn cmd_delete(cli: &Cli, resource: generated::Resource, id: String) -> Res
     )
     .await?;
 
-    // Render the response
-    match cli.global.output {
-        cli::OutputFormat::Json => {
-            if cli.global.pretty {
-                println!("{}", serde_json::to_string_pretty(&response.data)?);
-            } else {
-                println!("{}", serde_json::to_string(&response.data)?);
-            }
-        }
-        cli::OutputFormat::Yaml => {
-            println!("{}", serde_yaml::to_string(&response.data)?);
-        }
-        _ => {
-            println!("{}", serde_json::to_string_pretty(&response.data)?);
-        }
-    }
+    // Render the response using render module
+    println!(
+        "{}",
+        render::render_helper_mutation(cli.global.output, &response.data, cli.global.pretty)
+    );
 
     Ok(())
 }
@@ -1025,22 +730,11 @@ async fn cmd_archive(cli: &Cli, resource: generated::Resource, id: String) -> Re
     )
     .await?;
 
-    // Render the response
-    match cli.global.output {
-        cli::OutputFormat::Json => {
-            if cli.global.pretty {
-                println!("{}", serde_json::to_string_pretty(&response.data)?);
-            } else {
-                println!("{}", serde_json::to_string(&response.data)?);
-            }
-        }
-        cli::OutputFormat::Yaml => {
-            println!("{}", serde_yaml::to_string(&response.data)?);
-        }
-        _ => {
-            println!("{}", serde_json::to_string_pretty(&response.data)?);
-        }
-    }
+    // Render the response using render module
+    println!(
+        "{}",
+        render::render_helper_mutation(cli.global.output, &response.data, cli.global.pretty)
+    );
 
     Ok(())
 }
@@ -1082,22 +776,11 @@ async fn cmd_unarchive(cli: &Cli, resource: generated::Resource, id: String) -> 
     )
     .await?;
 
-    // Render the response
-    match cli.global.output {
-        cli::OutputFormat::Json => {
-            if cli.global.pretty {
-                println!("{}", serde_json::to_string_pretty(&response.data)?);
-            } else {
-                println!("{}", serde_json::to_string(&response.data)?);
-            }
-        }
-        cli::OutputFormat::Yaml => {
-            println!("{}", serde_yaml::to_string(&response.data)?);
-        }
-        _ => {
-            println!("{}", serde_json::to_string_pretty(&response.data)?);
-        }
-    }
+    // Render the response using render module
+    println!(
+        "{}",
+        render::render_helper_mutation(cli.global.output, &response.data, cli.global.pretty)
+    );
 
     Ok(())
 }
@@ -1167,37 +850,11 @@ async fn cmd_mutate(
     let op_name = op.operation_name();
     let result = data.get(op_name).cloned().unwrap_or_default();
 
-    // Render the response with proper envelope
-    match cli.global.output {
-        cli::OutputFormat::Json => {
-            let output = serde_json::json!({
-                "op": op_name,
-                "operation": "mutate",
-                "result": result,
-            });
-            if cli.global.pretty {
-                println!("{}", serde_json::to_string_pretty(&output)?);
-            } else {
-                println!("{}", serde_json::to_string(&output)?);
-            }
-        }
-        cli::OutputFormat::Yaml => {
-            let output = serde_json::json!({
-                "op": op_name,
-                "operation": "mutate",
-                "result": result,
-            });
-            println!("{}", serde_yaml::to_string(&output)?);
-        }
-        _ => {
-            let output = serde_json::json!({
-                "op": op_name,
-                "operation": "mutate",
-                "result": result,
-            });
-            println!("{}", serde_json::to_string_pretty(&output)?);
-        }
-    }
+    // Render the response using render module
+    println!(
+        "{}",
+        render::render_mutation_json(cli.global.output, op_name, &result, cli.global.pretty)
+    );
 
     Ok(())
 }
