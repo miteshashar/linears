@@ -307,36 +307,110 @@ async fn cmd_list(
         cli.global.timeout,
     )?;
 
-    // Build the query
-    let (query, variables) = build_list_query(resource, &options);
-
-    if cli.global.verbose {
-        eprintln!("Query: {}", query);
-        eprintln!("Variables: {}", serde_json::to_string_pretty(&variables)?);
-    }
-
-    // Execute the query with spinner
-    let request = GraphQLRequest {
-        query,
-        variables: Some(variables),
-        operation_name: None,
-    };
-
-    let response = with_spinner(
-        &format!("Fetching {}...", resource.field_name()),
-        client.execute(request),
-    )
-    .await?;
-
-    // Extract nodes and pageInfo from response
-    let data = response.data.unwrap_or_default();
     let resource_name = resource.field_name();
     let plural_name = query_builder::plural_field_name(resource_name);
 
-    // Navigate to the resource data
-    let resource_data = &data[&plural_name];
-    let nodes = resource_data.get("nodes").cloned().unwrap_or_default();
-    let page_info = resource_data.get("pageInfo").cloned();
+    // If --all is specified, auto-paginate
+    let (nodes, page_info) = if options.all {
+        const MAX_RECORDS: usize = 1000;
+        const PAGE_SIZE: i32 = 50;
+
+        let mut all_nodes: Vec<serde_json::Value> = Vec::new();
+        let mut cursor: Option<String> = None;
+        let mut final_page_info: Option<serde_json::Value> = None;
+
+        loop {
+            // Build query with current cursor
+            let mut page_options = options.clone();
+            page_options.first = Some(PAGE_SIZE);
+            page_options.after = cursor.clone();
+            page_options.all = false; // Prevent infinite recursion
+
+            let (query, variables) = build_list_query(resource, &page_options);
+
+            if cli.global.verbose {
+                eprintln!("Query: {}", query);
+                eprintln!("Variables: {}", serde_json::to_string_pretty(&variables)?);
+            }
+
+            let request = GraphQLRequest {
+                query,
+                variables: Some(variables),
+                operation_name: None,
+            };
+
+            let page_count = all_nodes.len() / PAGE_SIZE as usize + 1;
+            let response = with_spinner(
+                &format!("Fetching {} (page {})...", resource_name, page_count),
+                client.execute(request),
+            )
+            .await?;
+
+            let data = response.data.unwrap_or_default();
+            let resource_data = &data[&plural_name];
+
+            // Extract nodes from this page
+            if let Some(nodes_arr) = resource_data.get("nodes").and_then(|n| n.as_array()) {
+                all_nodes.extend(nodes_arr.iter().cloned());
+            }
+
+            // Check pagination info
+            let has_next = resource_data
+                .get("pageInfo")
+                .and_then(|p| p.get("hasNextPage"))
+                .and_then(|h| h.as_bool())
+                .unwrap_or(false);
+
+            let end_cursor = resource_data
+                .get("pageInfo")
+                .and_then(|p| p.get("endCursor"))
+                .and_then(|c| c.as_str())
+                .map(String::from);
+
+            final_page_info = resource_data.get("pageInfo").cloned();
+
+            // Stop if no more pages or max records reached
+            if !has_next || end_cursor.is_none() || all_nodes.len() >= MAX_RECORDS {
+                break;
+            }
+
+            cursor = end_cursor;
+        }
+
+        // Truncate to max if we exceeded
+        if all_nodes.len() > MAX_RECORDS {
+            all_nodes.truncate(MAX_RECORDS);
+        }
+
+        (serde_json::Value::Array(all_nodes), final_page_info)
+    } else {
+        // Single page fetch
+        let (query, variables) = build_list_query(resource, &options);
+
+        if cli.global.verbose {
+            eprintln!("Query: {}", query);
+            eprintln!("Variables: {}", serde_json::to_string_pretty(&variables)?);
+        }
+
+        let request = GraphQLRequest {
+            query,
+            variables: Some(variables),
+            operation_name: None,
+        };
+
+        let response = with_spinner(
+            &format!("Fetching {}...", resource_name),
+            client.execute(request),
+        )
+        .await?;
+
+        let data = response.data.unwrap_or_default();
+        let resource_data = &data[&plural_name];
+        let nodes = resource_data.get("nodes").cloned().unwrap_or_default();
+        let page_info = resource_data.get("pageInfo").cloned();
+
+        (nodes, page_info)
+    };
 
     // Render the response with proper envelope
     match cli.global.output {
