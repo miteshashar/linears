@@ -4,35 +4,34 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use crate::generated::{MutationOp, OrderBy, Resource};
 
+use std::sync::OnceLock;
+
 /// Schema metadata embedded at compile time
 const SCHEMA_META: &str = include_str!("../../schemas/linear/schema.meta.json");
 
-/// Get version string with schema info as static str (leaked for CLI lifetime)
-fn get_version() -> &'static str {
-    use std::sync::OnceLock;
-    static VERSION: OnceLock<&'static str> = OnceLock::new();
+/// Static storage for the computed version string
+static VERSION: OnceLock<String> = OnceLock::new();
 
+/// Get version string with schema info
+/// Uses OnceLock for idiomatic lazy initialization without memory leaks
+fn get_version() -> &'static str {
     VERSION.get_or_init(|| {
         let pkg_version = env!("CARGO_PKG_VERSION");
 
         // Try to parse schema metadata for enhanced version info
-        let version_string =
-            if let Ok(meta) = serde_json::from_str::<serde_json::Value>(SCHEMA_META) {
-                let commit = meta["commit"]
-                    .as_str()
-                    .map(|c| if c.len() >= 7 { &c[..7] } else { c })
-                    .unwrap_or("unknown");
-                let commit_date = meta["commitDate"]
-                    .as_str()
-                    .and_then(|d| d.split('T').next())
-                    .unwrap_or("unknown");
-                format!("{} (schema: {}, {})", pkg_version, commit, commit_date)
-            } else {
-                pkg_version.to_string()
-            };
-
-        // Leak the string to get a 'static reference (acceptable for CLI version string)
-        Box::leak(version_string.into_boxed_str())
+        if let Ok(meta) = serde_json::from_str::<serde_json::Value>(SCHEMA_META) {
+            let commit = meta["commit"]
+                .as_str()
+                .map(|c| if c.len() >= 7 { &c[..7] } else { c })
+                .unwrap_or("unknown");
+            let commit_date = meta["commitDate"]
+                .as_str()
+                .and_then(|d| d.split('T').next())
+                .unwrap_or("unknown");
+            format!("{} (schema: {}, {})", pkg_version, commit, commit_date)
+        } else {
+            pkg_version.to_string()
+        }
     })
 }
 
