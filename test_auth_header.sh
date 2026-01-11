@@ -54,5 +54,27 @@ else
     echo "PASS"
 fi
 
+# Test 5: API key should NOT appear in network error messages
+echo -n "Test 5: API key not exposed in network error... "
+secret_key="lin_api_secret_network_test"
+output=$(LINEAR_API_KEY="$secret_key" ./target/debug/linears --endpoint http://localhost:9999 list issue 2>&1) || true
+if echo "$output" | grep -q "secret_network_test"; then
+    echo "FAIL (API key was exposed in network error!)"
+    exit 1
+else
+    echo "PASS"
+fi
+
+# Test 6: API key should NOT appear in auth error messages
+echo -n "Test 6: API key not exposed in auth error... "
+secret_key="lin_api_secret_auth_test"
+output=$(LINEAR_API_KEY="$secret_key" ./target/debug/linears list issue 2>&1) || true
+if echo "$output" | grep -q "secret_auth_test"; then
+    echo "FAIL (API key was exposed in auth error!)"
+    exit 1
+else
+    echo "PASS"
+fi
+
 echo ""
 echo "All Authorization header tests passed!"
