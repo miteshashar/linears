@@ -166,6 +166,56 @@ async fn main() -> ExitCode {
     }
 }
 
+/// Format a JSON value for table display
+/// Handles datetime fields with relative time formatting
+fn format_value_for_table(value: Option<&serde_json::Value>, field_name: &str) -> String {
+    use chrono::{DateTime, Utc};
+    use chrono_humanize::HumanTime;
+
+    match value {
+        Some(serde_json::Value::String(s)) => {
+            // Check if this looks like a datetime field and try to parse it
+            let is_datetime_field = field_name.ends_with("At")
+                || field_name.ends_with("_at")
+                || field_name == "createdAt"
+                || field_name == "updatedAt"
+                || field_name == "archivedAt"
+                || field_name == "startedAt"
+                || field_name == "completedAt"
+                || field_name == "canceledAt"
+                || field_name == "dueDate";
+
+            if is_datetime_field {
+                // Try to parse as ISO 8601 datetime
+                if let Ok(dt) = s.parse::<DateTime<Utc>>() {
+                    let age = Utc::now().signed_duration_since(dt);
+                    // Use relative for recent dates (< 7 days)
+                    if age.num_days().abs() < 7 {
+                        return HumanTime::from(dt).to_string();
+                    } else {
+                        return dt.format("%b %d, %Y").to_string();
+                    }
+                }
+            }
+            s.clone()
+        }
+        Some(serde_json::Value::Number(n)) => n.to_string(),
+        Some(serde_json::Value::Bool(b)) => b.to_string(),
+        Some(serde_json::Value::Null) => "-".to_string(),
+        Some(serde_json::Value::Object(o)) => {
+            // For nested objects, try to get a display field
+            o.get("name")
+                .or_else(|| o.get("key"))
+                .or_else(|| o.get("id"))
+                .and_then(|v| v.as_str())
+                .map(String::from)
+                .unwrap_or_else(|| "[object]".to_string())
+        }
+        Some(serde_json::Value::Array(_)) => "[array]".to_string(),
+        None => "-".to_string(),
+    }
+}
+
 fn cmd_resources(cli: &Cli) -> Result<()> {
     use generated::Resource;
 
@@ -341,23 +391,7 @@ async fn cmd_list(
                             for item in arr {
                                 if let Some(item_obj) = item.as_object() {
                                     let row: Vec<String> = headers.iter().map(|h| {
-                                        match item_obj.get(*h) {
-                                            Some(serde_json::Value::String(s)) => s.clone(),
-                                            Some(serde_json::Value::Number(n)) => n.to_string(),
-                                            Some(serde_json::Value::Bool(b)) => b.to_string(),
-                                            Some(serde_json::Value::Null) => "-".to_string(),
-                                            Some(serde_json::Value::Object(o)) => {
-                                                // For nested objects, try to get a display field
-                                                o.get("name")
-                                                    .or_else(|| o.get("key"))
-                                                    .or_else(|| o.get("id"))
-                                                    .and_then(|v| v.as_str())
-                                                    .map(String::from)
-                                                    .unwrap_or_else(|| "[object]".to_string())
-                                            }
-                                            Some(serde_json::Value::Array(_)) => "[array]".to_string(),
-                                            None => "-".to_string(),
-                                        }
+                                        format_value_for_table(item_obj.get(*h), h)
                                     }).collect();
                                     println!("{}", row.join("\t"));
                                 }
