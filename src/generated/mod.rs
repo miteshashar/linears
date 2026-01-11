@@ -7,6 +7,7 @@ mod order_by;
 mod registry;
 mod resources;
 mod search_plan;
+mod validation_schema;
 
 pub use mutation_ops::MutationOp;
 pub use mutation_registry::{
@@ -19,3 +20,4 @@ pub use registry::{
 };
 pub use resources::Resource;
 pub use search_plan::{get_search_filter, get_searchable_fields, supports_search};
+pub use validation_schema::{get_valid_filter_keys, validate_filter_keys};

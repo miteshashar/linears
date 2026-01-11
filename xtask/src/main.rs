@@ -242,6 +242,9 @@ fn run_codegen() -> Result<()> {
     // Generate order_by enum
     generate_order_by(&ast, &generated_dir)?;
 
+    // Generate validation schema (filter keys per resource)
+    generate_validation_schema(&ast, &generated_dir)?;
+
     // Generate mod.rs
     generate_mod_rs(&generated_dir)?;
 
@@ -1340,6 +1343,203 @@ impl fmt::Display for OrderBy {
     Ok(())
 }
 
+/// Filter schema info: resource name -> list of valid filter keys
+struct FilterSchemaInfo {
+    /// Resource field name (e.g., "issue")
+    resource_name: String,
+    /// Valid filter keys for this resource
+    filter_keys: Vec<String>,
+}
+
+fn generate_validation_schema(
+    ast: &graphql_parser::schema::Document<String>,
+    output_dir: &PathBuf,
+) -> Result<()> {
+    use graphql_parser::schema::{Definition, TypeDefinition};
+
+    // Build map of input type name -> field names
+    let mut input_type_fields: HashMap<String, Vec<String>> = HashMap::new();
+
+    for def in &ast.definitions {
+        if let Definition::TypeDefinition(TypeDefinition::InputObject(input_def)) = def {
+            let fields: Vec<String> = input_def.fields.iter().map(|f| f.name.clone()).collect();
+            input_type_fields.insert(input_def.name.clone(), fields);
+        }
+    }
+
+    // Get all resources and find their corresponding filter types
+    let mut filter_schemas: Vec<FilterSchemaInfo> = Vec::new();
+
+    for def in &ast.definitions {
+        if let Definition::TypeDefinition(TypeDefinition::Object(obj)) = def {
+            if obj.name == "Query" {
+                for field in &obj.fields {
+                    // Skip internal/connection fields
+                    if field.name.ends_with("Connection")
+                        || field.name.starts_with("_")
+                        || field.name.starts_with("__")
+                    {
+                        continue;
+                    }
+
+                    // Look for a filter argument on this field
+                    for arg in &field.arguments {
+                        if arg.name == "filter" {
+                            let filter_type_name = extract_input_type_name(&arg.value_type);
+                            if let Some(filter_keys) = input_type_fields.get(&filter_type_name) {
+                                filter_schemas.push(FilterSchemaInfo {
+                                    resource_name: field.name.clone(),
+                                    filter_keys: filter_keys.clone(),
+                                });
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    filter_schemas.sort_by(|a, b| a.resource_name.cmp(&b.resource_name));
+
+    // Generate validation_schema.rs
+    let mut code = String::from(
+        r#"//! Generated validation schema - DO NOT EDIT
+//! Run `cargo xtask codegen` to regenerate
+
+use super::Resource;
+
+/// Get valid filter keys for a resource type.
+/// Returns None if the resource doesn't support filtering.
+pub fn get_valid_filter_keys(resource: Resource) -> Option<&'static [&'static str]> {
+    match resource {
+"#,
+    );
+
+    // Generate match arms
+    for schema in &filter_schemas {
+        let variant = to_pascal_case(&schema.resource_name);
+        let keys_str = schema
+            .filter_keys
+            .iter()
+            .map(|k| format!("\"{}\"", k))
+            .collect::<Vec<_>>()
+            .join(", ");
+        code.push_str(&format!(
+            "        Resource::{} => Some(&[{}]),\n",
+            variant, keys_str
+        ));
+    }
+
+    code.push_str(
+        r#"        _ => None,
+    }
+}
+
+/// Validate filter keys and return unknown keys with suggestions.
+/// Returns Ok(()) if all keys are valid, Err with suggestions otherwise.
+pub fn validate_filter_keys(
+    resource: Resource,
+    filter: &serde_json::Value,
+) -> Result<(), Vec<(String, Option<String>)>> {
+    let valid_keys = match get_valid_filter_keys(resource) {
+        Some(keys) => keys,
+        None => return Ok(()), // No validation available
+    };
+
+    let mut errors: Vec<(String, Option<String>)> = Vec::new();
+
+    if let Some(obj) = filter.as_object() {
+        for key in obj.keys() {
+            if !valid_keys.contains(&key.as_str()) {
+                // Find closest match using simple similarity
+                let suggestion = find_closest_match(key, valid_keys);
+                errors.push((key.clone(), suggestion));
+            }
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
+}
+
+/// Find the closest matching key using simple Levenshtein-like heuristics
+fn find_closest_match(input: &str, valid_keys: &[&str]) -> Option<String> {
+    let input_lower = input.to_lowercase();
+
+    // First try: exact case-insensitive match
+    for key in valid_keys {
+        if key.to_lowercase() == input_lower {
+            return Some(key.to_string());
+        }
+    }
+
+    // Second try: prefix match
+    for key in valid_keys {
+        if key.to_lowercase().starts_with(&input_lower) || input_lower.starts_with(&key.to_lowercase()) {
+            return Some(key.to_string());
+        }
+    }
+
+    // Third try: Levenshtein distance
+    let mut best_match: Option<(&str, usize)> = None;
+    for key in valid_keys {
+        let distance = levenshtein_distance(&input_lower, &key.to_lowercase());
+        // Only suggest if distance is reasonable (less than half the key length + 2)
+        let threshold = (key.len() / 2).max(2) + 1;
+        if distance <= threshold {
+            match best_match {
+                None => best_match = Some((key, distance)),
+                Some((_, best_dist)) if distance < best_dist => best_match = Some((key, distance)),
+                _ => {}
+            }
+        }
+    }
+
+    best_match.map(|(key, _)| key.to_string())
+}
+
+/// Compute Levenshtein edit distance between two strings
+fn levenshtein_distance(a: &str, b: &str) -> usize {
+    let a_chars: Vec<char> = a.chars().collect();
+    let b_chars: Vec<char> = b.chars().collect();
+    let m = a_chars.len();
+    let n = b_chars.len();
+
+    if m == 0 { return n; }
+    if n == 0 { return m; }
+
+    let mut prev: Vec<usize> = (0..=n).collect();
+    let mut curr: Vec<usize> = vec![0; n + 1];
+
+    for i in 1..=m {
+        curr[0] = i;
+        for j in 1..=n {
+            let cost = if a_chars[i - 1] == b_chars[j - 1] { 0 } else { 1 };
+            curr[j] = (prev[j] + 1)          // deletion
+                .min(curr[j - 1] + 1)         // insertion
+                .min(prev[j - 1] + cost);     // substitution
+        }
+        std::mem::swap(&mut prev, &mut curr);
+    }
+
+    prev[n]
+}
+"#,
+    );
+
+    fs::write(output_dir.join("validation_schema.rs"), code)?;
+    println!(
+        "  Generated validation_schema.rs ({} resources with filter schemas)",
+        filter_schemas.len()
+    );
+
+    Ok(())
+}
+
 fn generate_mod_rs(output_dir: &PathBuf) -> Result<()> {
     let code = r#"//! Generated code - DO NOT EDIT
 //! Run `cargo xtask codegen` to regenerate
@@ -1350,6 +1550,7 @@ mod order_by;
 mod registry;
 mod resources;
 mod search_plan;
+mod validation_schema;
 
 pub use mutation_ops::MutationOp;
 pub use mutation_registry::{
@@ -1362,6 +1563,7 @@ pub use registry::{
 };
 pub use resources::Resource;
 pub use search_plan::{get_search_filter, get_searchable_fields, supports_search};
+pub use validation_schema::{get_valid_filter_keys, validate_filter_keys};
 "#;
 
     fs::write(output_dir.join("mod.rs"), code)?;

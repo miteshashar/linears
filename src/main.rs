@@ -343,6 +343,28 @@ async fn cmd_list(
     // Get API key (already validated in main)
     let api_key = get_api_key().expect("API key already validated");
 
+    // Validate filter keys if a filter is provided
+    if let Some(ref filter_str) = options.filter {
+        if filter_str != "-" {
+            // Parse and validate the filter
+            if let Ok(filter_value) = validate::parse_input(filter_str) {
+                if let Err(errors) = generated::validate_filter_keys(resource, &filter_value) {
+                    let resource_name = resource.field_name();
+                    for (key, suggestion) in errors {
+                        let suggestion_msg = suggestion
+                            .map(|s| format!(". Did you mean: {}?", s))
+                            .unwrap_or_default();
+                        eprintln!(
+                            "error: Unknown filter key '{}' for {}{}",
+                            key, resource_name, suggestion_msg
+                        );
+                    }
+                    anyhow::bail!("Invalid filter keys");
+                }
+            }
+        }
+    }
+
     // Create client
     let client = Client::new(
         &api_key,
