@@ -30,8 +30,8 @@
   <prerequisites>
     <environment_setup>
       - Rust toolchain (stable, 1.85+ for 2024 edition)
-      - LINEAR_API_KEY environment variable (required for API calls)
-      - Optional: LINEAR_ENDPOINT, LINEARS_OUTPUT, LINEARS_WORKSPACE env vars
+      - LINEARS_API_KEY environment variable (required for API calls)
+      - Optional: LINEARS_ENDPOINT, LINEARS_OUTPUT, LINEARS_WORKSPACE env vars
     </environment_setup>
   </prerequisites>
 
@@ -39,10 +39,10 @@
 
   <environment_variables>
     <required>
-      <var name="LINEAR_API_KEY">Personal API key for Linear authentication</var>
+      <var name="LINEARS_API_KEY">Personal API key for Linear authentication</var>
     </required>
     <optional>
-      <var name="LINEAR_ENDPOINT">Override default API endpoint (https://api.linear.app/graphql)</var>
+      <var name="LINEARS_ENDPOINT">Override default API endpoint (https://api.linear.app/graphql)</var>
       <var name="LINEARS_OUTPUT">Default output format: json|yaml|table|text|ndjson</var>
       <var name="LINEARS_WORKSPACE">Workspace slug or ID (required for multi-workspace API keys)</var>
     </optional>
@@ -144,7 +144,7 @@
     <exit_codes>
       - 0: Success
       - 1: General/unknown error
-      - 2: Auth error (missing/invalid LINEAR_API_KEY)
+      - 2: Auth error (missing/invalid LINEARS_API_KEY)
       - 3: Network error (connection failed, timeout)
       - 4: GraphQL error (valid request, Linear returned errors)
     </exit_codes>
@@ -230,14 +230,14 @@
     </unit_tests>
     <integration_tests>
       - Mock GraphQL server validates:
-        - Authorization header uses LINEAR_API_KEY value
+        - Authorization header uses LINEARS_API_KEY value
         - Request body matches expected document + variables
         - Retry/backoff behavior on 429/5xx
         - Output formatting stable for all formats
     </integration_tests>
     <live_smoke_tests>
       - Optional, off by default
-      - Enabled by env var, requires LINEAR_API_KEY
+      - Enabled by env var, requires LINEARS_API_KEY
     </live_smoke_tests>
   </testing_strategy>
 
@@ -277,7 +277,7 @@
       <title>HTTP Client</title>
       <tasks>
         - Implement GraphQL client with reqwest
-        - Add authentication header from LINEAR_API_KEY
+        - Add authentication header from LINEARS_API_KEY
         - Implement retry logic for 429 with Retry-After
         - Implement exponential backoff for 5xx
         - Add timeout support
