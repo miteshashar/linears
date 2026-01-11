@@ -1,0 +1,11 @@
+---
+source: tests/snapshot_tests.rs
+expression: names
+---
+- issueCreate
+- issueUpdate
+- issueDelete
+- issueArchive
+- commentCreate
+- commentUpdate
+- commentDelete

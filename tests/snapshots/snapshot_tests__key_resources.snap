@@ -1,0 +1,20 @@
+---
+source: tests/snapshot_tests.rs
+expression: names
+---
+- issue
+- issues
+- team
+- teams
+- user
+- users
+- project
+- projects
+- cycle
+- cycles
+- comment
+- comments
+- issueLabel
+- issueLabels
+- workflowState
+- workflowStates
