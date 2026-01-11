@@ -53,7 +53,8 @@ impl Spinner {
         }
     }
 
-    /// Update the spinner message
+    /// Update the spinner message dynamically
+    /// Intended for: pagination progress (e.g., "Fetching issues (page 5)...")
     #[allow(dead_code)]
     pub fn set_message(&self, message: &str) {
         if let Some(bar) = &self.bar {
@@ -69,6 +70,7 @@ impl Spinner {
     }
 
     /// Finish the spinner with a custom message
+    /// Intended for: multi-step operations showing completion state
     #[allow(dead_code)]
     pub fn finish_with_message(&self, message: &str) {
         if let Some(bar) = &self.bar {

@@ -201,9 +201,15 @@ pub async fn cmd_mutate(cli: &Cli, op: MutationOp, vars: VarsOptions) -> Result<
     // Create client
     let client = create_client(&cli.global)?;
 
-    // Parse variables
-    let mut variables = validate::resolve_input(vars.vars.as_deref(), vars.vars_file.as_deref())
-        .unwrap_or_else(|_| serde_json::json!({}));
+    // Parse variables (if any provided)
+    // If user explicitly provided --vars or --vars-file, parsing errors should be reported
+    // Only use empty {} when no variables are provided at all
+    let mut variables = if vars.vars.is_some() || vars.vars_file.is_some() {
+        validate::resolve_input(vars.vars.as_deref(), vars.vars_file.as_deref())
+            .map_err(|e| anyhow::anyhow!("Failed to parse variables: {}", e))?
+    } else {
+        serde_json::json!({})
+    };
 
     // Apply individual variable overrides
     if let Some(var_overrides) = vars.var {

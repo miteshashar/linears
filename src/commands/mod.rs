@@ -15,6 +15,7 @@ use anyhow::Result;
 
 use crate::cli::GlobalOptions;
 use crate::client::Client;
+use crate::common::constants::env;
 
 // Re-export all command handlers for easy access
 pub use discovery::{cmd_ops, cmd_resources};
@@ -24,28 +25,30 @@ pub use schema::cmd_schema;
 
 /// Get the API key from environment, returning error message if missing or empty
 pub fn get_api_key() -> Result<String, String> {
-    match std::env::var("LINEARS_API_KEY") {
-        Ok(key) if key.trim().is_empty() => Err(
-            "LINEARS_API_KEY environment variable is empty.\n\
+    match std::env::var(env::API_KEY) {
+        Ok(key) if key.trim().is_empty() => Err(format!(
+            "{} environment variable is empty.\n\
              \n\
              To use this command, set your Linear API key:\n\
              \n\
-               export LINEARS_API_KEY='lin_api_...'\n\
+               export {}='lin_api_...'\n\
              \n\
-             Get your API key from: https://linear.app/settings/api"
-                .to_string(),
-        ),
+             Get your API key from: https://linear.app/settings/api",
+            env::API_KEY,
+            env::API_KEY
+        )),
         Ok(key) => Ok(key),
-        Err(_) => Err(
-            "Missing LINEARS_API_KEY environment variable.\n\
+        Err(_) => Err(format!(
+            "Missing {} environment variable.\n\
              \n\
              To use this command, set your Linear API key:\n\
              \n\
-               export LINEARS_API_KEY='lin_api_...'\n\
+               export {}='lin_api_...'\n\
              \n\
-             Get your API key from: https://linear.app/settings/api"
-                .to_string(),
-        ),
+             Get your API key from: https://linear.app/settings/api",
+            env::API_KEY,
+            env::API_KEY
+        )),
     }
 }
 

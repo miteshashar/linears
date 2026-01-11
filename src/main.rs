@@ -6,14 +6,13 @@
 //! - Discovery commands: resources, ops
 //! - Schema commands: info, diff, sync
 
-use std::process::ExitCode;
-
 use anyhow::Result;
 use clap::Parser;
 
 mod cli;
 mod client;
 mod commands;
+mod common;
 mod generated;
 mod mutation_builder;
 mod progress;
@@ -24,17 +23,7 @@ mod validate;
 
 use cli::{Cli, Commands};
 use commands::{get_api_key, *};
-
-/// Exit codes for the CLI
-mod exit_codes {
-    pub const SUCCESS: u8 = 0;
-    pub const GENERAL_ERROR: u8 = 1;
-    pub const AUTH_ERROR: u8 = 2;
-    #[allow(dead_code)]
-    pub const NETWORK_ERROR: u8 = 3;
-    #[allow(dead_code)]
-    pub const GRAPHQL_ERROR: u8 = 4;
-}
+use common::ExitCode;
 
 /// Check if the command requires API access
 fn command_requires_api(cmd: &Commands) -> bool {
@@ -42,7 +31,7 @@ fn command_requires_api(cmd: &Commands) -> bool {
 }
 
 #[tokio::main]
-async fn main() -> ExitCode {
+async fn main() -> std::process::ExitCode {
     let _ = dotenvy::dotenv();
     let cli = Cli::parse();
 
@@ -52,7 +41,7 @@ async fn main() -> ExitCode {
     if command_requires_api(&cli.command) {
         if let Err(msg) = get_api_key() {
             eprintln!("Error: {}", msg);
-            return ExitCode::from(exit_codes::AUTH_ERROR);
+            return ExitCode::AuthError.into();
         }
     }
 
@@ -87,7 +76,7 @@ async fn main() -> ExitCode {
 
     // Handle result
     match result {
-        Ok(()) => ExitCode::from(exit_codes::SUCCESS),
+        Ok(()) => ExitCode::Success.into(),
         Err(e) => {
             let (exit_code, kind, message, hint, graphql_errors, details) =
                 if let Some(err) = e.downcast_ref::<client::ClientError>() {
@@ -108,18 +97,18 @@ async fn main() -> ExitCode {
                     };
                     (err.exit_code(), kind, format!("{}", err), err.hint(), gql_errors, details)
                 } else {
-                    (exit_codes::GENERAL_ERROR, "general", format!("{:#}", e), None, None, None)
+                    (ExitCode::GeneralError, "general", format!("{:#}", e), None, None, None)
                 };
 
             let error_info = render::ErrorInfo {
                 kind,
                 message: &message,
-                hint,
+                hint: hint.as_deref(),
                 details: details.as_ref(),
                 graphql_errors: graphql_errors.as_ref(),
             };
             eprintln!("{}", render::render_error(cli.global.output, &error_info, cli.global.pretty));
-            ExitCode::from(exit_code)
+            exit_code.into()
         }
     }
 }

@@ -8,6 +8,8 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::time::sleep;
 
+use crate::common::{constants::client as client_constants, constants::env, ExitCode};
+
 /// Errors that can occur when using the Linear API client
 #[derive(Debug, Error)]
 pub enum ClientError {
@@ -43,36 +45,32 @@ pub enum ClientError {
 
 impl ClientError {
     /// Get the exit code for this error
-    pub fn exit_code(&self) -> u8 {
+    pub fn exit_code(&self) -> ExitCode {
         match self {
-            ClientError::Auth(_) => 2,
-            ClientError::Network(_) => 3,
-            ClientError::GraphQL(_, _) => 4,
-            ClientError::RateLimited(_) => 1,
-            ClientError::RateLimitedTooLong(_) => 1,
-            ClientError::Server(_) => 1,
-            ClientError::Other(_) => 1,
+            ClientError::Auth(_) => ExitCode::AuthError,
+            ClientError::Network(_) => ExitCode::NetworkError,
+            ClientError::GraphQL(_, _) => ExitCode::GraphQLError,
+            ClientError::RateLimited(_) => ExitCode::GeneralError,
+            ClientError::RateLimitedTooLong(_) => ExitCode::GeneralError,
+            ClientError::Server(_) => ExitCode::GeneralError,
+            ClientError::Other(_) => ExitCode::GeneralError,
         }
     }
 
     /// Get a helpful hint for this error
-    pub fn hint(&self) -> Option<&'static str> {
+    pub fn hint(&self) -> Option<String> {
         match self {
-            ClientError::Auth(_) => Some("Check that LINEARS_API_KEY is set correctly"),
-            ClientError::Network(_) => Some("Check your network connection"),
+            ClientError::Auth(_) => Some(format!("Check that {} is set correctly", env::API_KEY)),
+            ClientError::Network(_) => Some("Check your network connection".to_string()),
             ClientError::RateLimited(_) | ClientError::RateLimitedTooLong(_) => {
-                Some("The API is rate-limiting your requests. Wait and try again")
+                Some("The API is rate-limiting your requests. Wait and try again".to_string())
             }
-            ClientError::Server(_) => Some("Linear is experiencing issues. Try again later"),
+            ClientError::Server(_) => Some("Linear is experiencing issues. Try again later".to_string()),
             _ => None,
         }
     }
 }
 
-/// Retry configuration for 5xx errors
-const MAX_RETRIES: u32 = 10;
-const BASE_DELAY_MS: u64 = 100;
-const MAX_DELAY_MS: u64 = 30_000;
 
 /// GraphQL client for Linear API
 pub struct Client {
@@ -164,16 +162,16 @@ impl Client {
 
             match result {
                 Ok(response) => return Ok(response),
-                Err(ClientError::Server(ref msg)) if retries < MAX_RETRIES => {
+                Err(ClientError::Server(ref msg)) if retries < client_constants::MAX_RETRIES => {
                     // Retry on server errors with exponential backoff + jitter
                     retries += 1;
-                    let base_delay = BASE_DELAY_MS * 2u64.pow(retries - 1);
+                    let base_delay = client_constants::BASE_DELAY_MS * 2u64.pow(retries - 1);
                     let jitter = rand::rng().random_range(0..=base_delay / 2);
-                    let delay = (base_delay + jitter).min(MAX_DELAY_MS);
+                    let delay = (base_delay + jitter).min(client_constants::MAX_DELAY_MS);
 
                     eprintln!(
                         "Server error ({}), retrying in {}ms (attempt {}/{})",
-                        msg, delay, retries, MAX_RETRIES
+                        msg, delay, retries, client_constants::MAX_RETRIES
                     );
 
                     sleep(Duration::from_millis(delay)).await;
@@ -224,7 +222,7 @@ impl Client {
                 .and_then(|s| s.parse::<u64>().ok());
 
             if let Some(secs) = retry_after {
-                if secs <= 60 {
+                if secs <= client_constants::RATE_LIMIT_AUTO_RETRY_THRESHOLD_SECS {
                     // Short wait - can be retried automatically
                     return Err(ClientError::RateLimited(secs));
                 } else {

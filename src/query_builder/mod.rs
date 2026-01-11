@@ -1,15 +1,17 @@
 //! Query construction for list, get, and search operations
 
 use crate::cli::ListOptions;
+use crate::common::{to_pascal_case, FieldsetPreset};
 use crate::generated::{
-    get_entity_fields, get_preset_fields, get_relation_fields, get_search_filter, FieldPreset,
-    Resource,
+    get_entity_fields, get_preset_fields, get_relation_fields, get_search_filter, Resource,
 };
 
-/// Build a list query for a resource
-pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, serde_json::Value) {
-    use crate::validate;
-
+/// Build a list query with a pre-parsed filter value
+pub fn build_list_query_with_filter(
+    resource: Resource,
+    options: &ListOptions,
+    filter_value: Option<serde_json::Value>,
+) -> (String, serde_json::Value) {
     let field_name = resource.field_name();
     // Use schema-derived plural name (avoids naive pluralization bugs)
     let plural_name = resource.plural_name();
@@ -118,22 +120,29 @@ pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, s
         )
     };
 
-    // Parse filter if provided (support stdin with '-')
-    let filter_value: Option<serde_json::Value> = if let Some(ref filter) = options.filter {
-        if filter == "-" {
-            // Read filter from stdin
-            validate::read_stdin()
+    // Use pre-parsed filter if provided, otherwise parse from options (for backward compat)
+    let resolved_filter: Option<serde_json::Value> = if filter_value.is_some() {
+        filter_value
+    } else {
+        // Fallback: parse from options (used by tests and legacy callers)
+        // Note: This path uses .ok() for backward compatibility but cmd_list now
+        // uses resolve_filter() which provides proper error handling
+        use crate::validate;
+        if let Some(ref filter) = options.filter {
+            if filter == "-" {
+                validate::read_stdin()
+                    .ok()
+                    .and_then(|content| validate::parse_input(&content).ok())
+            } else {
+                validate::parse_input(filter).ok()
+            }
+        } else if let Some(ref path) = options.filter_file {
+            validate::read_file(path)
                 .ok()
                 .and_then(|content| validate::parse_input(&content).ok())
         } else {
-            validate::parse_input(filter).ok()
+            None
         }
-    } else if let Some(ref path) = options.filter_file {
-        validate::read_file(path)
-            .ok()
-            .and_then(|content| validate::parse_input(&content).ok())
-    } else {
-        None
     };
 
     // Only include includeArchived if it's true
@@ -151,7 +160,7 @@ pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, s
         "after": options.after,
         "last": options.last,
         "before": options.before,
-        "filter": filter_value,
+        "filter": resolved_filter,
         "includeArchived": include_archived,
         "orderBy": order_by_value,
     });
@@ -161,19 +170,13 @@ pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, s
 
 /// Get the fields to select for a resource type with preset
 /// Delegates to generated registry
-fn get_resource_fields_for_preset(resource: Resource, preset: crate::cli::Preset) -> &'static str {
-    // Convert cli::Preset to generated::FieldPreset
-    let field_preset = match preset {
-        crate::cli::Preset::Minimal => FieldPreset::Minimal,
-        crate::cli::Preset::Default => FieldPreset::Default,
-        crate::cli::Preset::Wide => FieldPreset::Wide,
-    };
-    get_preset_fields(resource, field_preset)
+fn get_resource_fields_for_preset(resource: Resource, preset: FieldsetPreset) -> &'static str {
+    get_preset_fields(resource, preset)
 }
 
 /// Get the default fields to select for a resource type
 fn get_resource_fields(resource: Resource) -> &'static str {
-    get_resource_fields_for_preset(resource, crate::cli::Preset::Default)
+    get_resource_fields_for_preset(resource, FieldsetPreset::Default)
 }
 
 /// Build a get query for a single entity
@@ -243,30 +246,11 @@ pub enum SearchStrategy {
 }
 
 impl SearchStrategy {
-    #[allow(dead_code)]
     pub fn as_str(&self) -> &'static str {
         match self {
             SearchStrategy::FilterHeuristic => "filter_heuristic",
         }
     }
-}
-
-fn to_pascal_case(s: &str) -> String {
-    let mut result = String::new();
-    let mut capitalize_next = true;
-
-    for c in s.chars() {
-        if c == '_' || c == '-' {
-            capitalize_next = true;
-        } else if capitalize_next {
-            result.push(c.to_ascii_uppercase());
-            capitalize_next = false;
-        } else {
-            result.push(c);
-        }
-    }
-
-    result
 }
 
 /// Parse an --expand spec like "team" or "team:name,key"

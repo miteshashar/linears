@@ -4,35 +4,62 @@ use anyhow::Result;
 
 use crate::cli::{Cli, ListOptions, VarsOptions};
 use crate::client::GraphQLRequest;
+use crate::common::constants::pagination;
 use crate::generated::{self, Resource};
 use crate::progress::with_spinner;
-use crate::query_builder::{build_get_query, build_list_query, build_search_query};
+use crate::query_builder::{build_get_query, build_list_query_with_filter, build_search_query};
 use crate::render;
 use crate::validate;
 
 use super::create_client;
 
+/// Resolve filter from any source (inline, file, or stdin) with proper error handling
+fn resolve_filter(options: &ListOptions) -> Result<Option<serde_json::Value>> {
+    if let Some(ref filter_str) = options.filter {
+        if filter_str == "-" {
+            // Read filter from stdin
+            let content = validate::read_stdin()
+                .map_err(|e| anyhow::anyhow!("Failed to read filter from stdin: {}", e))?;
+            let value = validate::parse_input(&content)
+                .map_err(|e| anyhow::anyhow!("Failed to parse filter from stdin: {}", e))?;
+            Ok(Some(value))
+        } else {
+            // Parse inline filter
+            let value = validate::parse_input(filter_str)
+                .map_err(|e| anyhow::anyhow!("Failed to parse filter: {}", e))?;
+            Ok(Some(value))
+        }
+    } else if let Some(ref path) = options.filter_file {
+        // Read filter from file
+        let content = validate::read_file(path)
+            .map_err(|e| anyhow::anyhow!("Failed to read filter file '{}': {}", path, e))?;
+        let value = validate::parse_input(&content)
+            .map_err(|e| anyhow::anyhow!("Failed to parse filter file '{}': {}", path, e))?;
+        Ok(Some(value))
+    } else {
+        Ok(None)
+    }
+}
+
 /// List entities with pagination and filtering
 pub async fn cmd_list(cli: &Cli, resource: Resource, options: ListOptions) -> Result<()> {
+    // Resolve filter from any source with proper error handling
+    let filter_value = resolve_filter(&options)?;
+
     // Validate filter keys if a filter is provided
-    if let Some(ref filter_str) = options.filter {
-        if filter_str != "-" {
-            // Parse and validate the filter
-            if let Ok(filter_value) = validate::parse_input(filter_str) {
-                if let Err(errors) = generated::validate_filter_keys(resource, &filter_value) {
-                    let resource_name = resource.field_name();
-                    for (key, suggestion) in errors {
-                        let suggestion_msg = suggestion
-                            .map(|s| format!(". Did you mean: {}?", s))
-                            .unwrap_or_default();
-                        eprintln!(
-                            "error: Unknown filter key '{}' for {}{}",
-                            key, resource_name, suggestion_msg
-                        );
-                    }
-                    anyhow::bail!("Invalid filter keys");
-                }
+    if let Some(ref filter) = filter_value {
+        if let Err(errors) = generated::validate_filter_keys(resource, filter) {
+            let resource_name = resource.field_name();
+            for (key, suggestion) in errors {
+                let suggestion_msg = suggestion
+                    .map(|s| format!(". Did you mean: {}?", s))
+                    .unwrap_or_default();
+                eprintln!(
+                    "error: Unknown filter key '{}' for {}{}",
+                    key, resource_name, suggestion_msg
+                );
             }
+            anyhow::bail!("Invalid filter keys");
         }
     }
 
@@ -45,8 +72,6 @@ pub async fn cmd_list(cli: &Cli, resource: Resource, options: ListOptions) -> Re
 
     // If --all is specified, auto-paginate
     let (nodes, page_info) = if options.all {
-        const MAX_RECORDS: usize = 1000;
-        const PAGE_SIZE: i32 = 50;
 
         let mut all_nodes: Vec<serde_json::Value> = Vec::new();
         let mut cursor: Option<String> = None;
@@ -57,11 +82,11 @@ pub async fn cmd_list(cli: &Cli, resource: Resource, options: ListOptions) -> Re
         loop {
             // Build query with current cursor
             let mut page_options = options.clone();
-            page_options.first = Some(PAGE_SIZE);
+            page_options.first = Some(pagination::PAGE_SIZE);
             page_options.after = cursor.clone();
             page_options.all = false; // Prevent infinite recursion
 
-            let (query, variables) = build_list_query(resource, &page_options);
+            let (query, variables) = build_list_query_with_filter(resource, &page_options, filter_value.clone());
 
             if cli.global.verbose {
                 eprintln!("Query: {}", query);
@@ -74,7 +99,7 @@ pub async fn cmd_list(cli: &Cli, resource: Resource, options: ListOptions) -> Re
                 operation_name: None,
             };
 
-            let page_count = all_nodes.len() / PAGE_SIZE as usize + 1;
+            let page_count = all_nodes.len() / pagination::PAGE_SIZE as usize + 1;
             let response = with_spinner(
                 &format!("Fetching {} (page {})...", resource_name, page_count),
                 client.execute(request),
@@ -105,7 +130,7 @@ pub async fn cmd_list(cli: &Cli, resource: Resource, options: ListOptions) -> Re
             final_page_info = resource_data.get("pageInfo").cloned();
 
             // Stop if no more pages or max records reached
-            if !has_next || end_cursor.is_none() || all_nodes.len() >= MAX_RECORDS {
+            if !has_next || end_cursor.is_none() || all_nodes.len() >= pagination::MAX_RECORDS {
                 break;
             }
 
@@ -113,14 +138,14 @@ pub async fn cmd_list(cli: &Cli, resource: Resource, options: ListOptions) -> Re
         }
 
         // Truncate to max if we exceeded
-        if all_nodes.len() > MAX_RECORDS {
-            all_nodes.truncate(MAX_RECORDS);
+        if all_nodes.len() > pagination::MAX_RECORDS {
+            all_nodes.truncate(pagination::MAX_RECORDS);
         }
 
         (serde_json::Value::Array(all_nodes), final_page_info)
     } else {
         // Single page fetch
-        let (query, variables) = build_list_query(resource, &options);
+        let (query, variables) = build_list_query_with_filter(resource, &options, filter_value);
 
         if cli.global.verbose {
             eprintln!("Query: {}", query);
@@ -164,6 +189,17 @@ pub async fn cmd_list(cli: &Cli, resource: Resource, options: ListOptions) -> Re
 
 /// Get a single entity by ID or key
 pub async fn cmd_get(cli: &Cli, resource: Resource, id: String) -> Result<()> {
+    // Detect ID type for verbose output (Linear API accepts both UUID and identifier)
+    let id_type = validate::detect_id_type(&id);
+    if cli.global.verbose {
+        let type_str = match id_type {
+            validate::IdType::Uuid => "UUID",
+            validate::IdType::Identifier => "identifier (e.g., ENG-123)",
+            validate::IdType::Unknown => "unknown format",
+        };
+        eprintln!("ID type: {} ({})", type_str, id);
+    }
+
     // Create client
     let client = create_client(&cli.global)?;
 

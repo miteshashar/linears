@@ -1,5 +1,6 @@
 //! Mutation construction for create, update, delete, and archive operations
 
+use crate::common::{to_camel_case, to_pascal_case};
 use crate::generated::{get_mutation_result_fields, MutationOp};
 
 /// Build a mutation query for any operation
@@ -190,32 +191,3 @@ pub fn build_unarchive_mutation(resource_name: &str, id: &str) -> (String, serde
     (query, variables)
 }
 
-fn to_pascal_case(s: &str) -> String {
-    let mut result = String::new();
-    let mut capitalize_next = true;
-
-    for c in s.chars() {
-        if c == '_' || c == '-' {
-            capitalize_next = true;
-        } else if capitalize_next {
-            result.push(c.to_ascii_uppercase());
-            capitalize_next = false;
-        } else {
-            result.push(c);
-        }
-    }
-
-    result
-}
-
-fn to_camel_case(s: &str) -> String {
-    let pascal = to_pascal_case(s);
-    let mut chars = pascal.chars();
-    match chars.next() {
-        None => String::new(),
-        Some(c) => c.to_lowercase().collect::<String>() + chars.as_str(),
-    }
-}
-
-// Note: get_mutation_result_fields is now imported from crate::generated::mutation_registry
-// as get_mutation_result_fields

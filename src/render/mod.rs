@@ -8,6 +8,8 @@ use chrono::{DateTime, Utc};
 use chrono_humanize::HumanTime;
 use serde::Serialize;
 
+use crate::common::constants::display;
+
 // ============================================================================
 // Query Rendering
 // ============================================================================
@@ -434,15 +436,9 @@ pub fn format_value_for_table(value: Option<&serde_json::Value>, field_name: &st
                 || field_name == "dueDate";
 
             if is_datetime_field {
-                // Try to parse as ISO 8601 datetime
+                // Try to parse as ISO 8601 datetime and format smartly
                 if let Ok(dt) = s.parse::<DateTime<Utc>>() {
-                    let age = Utc::now().signed_duration_since(dt);
-                    // Use relative for recent dates (< 7 days)
-                    if age.num_days().abs() < 7 {
-                        return HumanTime::from(dt).to_string();
-                    } else {
-                        return dt.format("%b %d, %Y").to_string();
-                    }
+                    return format_datetime_smart(&dt);
                 }
             }
             s.clone()
@@ -464,23 +460,12 @@ pub fn format_value_for_table(value: Option<&serde_json::Value>, field_name: &st
     }
 }
 
-/// Format a datetime for display
-#[allow(dead_code)]
-pub fn format_datetime(dt: &DateTime<Utc>, relative: bool) -> String {
-    if relative {
-        HumanTime::from(*dt).to_string()
-    } else {
-        dt.format("%Y-%m-%d %H:%M").to_string()
-    }
-}
-
 /// Format a datetime as relative ("2 hours ago") or absolute based on age
-#[allow(dead_code)]
 pub fn format_datetime_smart(dt: &DateTime<Utc>) -> String {
     let age = Utc::now().signed_duration_since(*dt);
 
-    // Use relative for recent dates (< 7 days)
-    if age.num_days() < 7 {
+    // Use relative for recent dates (< 7 days in either direction)
+    if age.num_days().abs() < display::RELATIVE_TIME_THRESHOLD_DAYS {
         HumanTime::from(*dt).to_string()
     } else {
         dt.format("%b %d, %Y").to_string()

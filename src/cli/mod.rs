@@ -2,6 +2,8 @@
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
+use crate::common::constants::{client as client_const, env as env_const};
+use crate::common::FieldsetPreset;
 use crate::generated::{MutationOp, OrderBy, Resource};
 
 use std::sync::OnceLock;
@@ -53,7 +55,7 @@ pub struct Cli {
 #[derive(Args)]
 pub struct GlobalOptions {
     /// Output format
-    #[arg(long = "out", value_enum, default_value = "table", env = "LINEARS_OUTPUT")]
+    #[arg(long = "out", value_enum, default_value = "table", env = env_const::OUTPUT)]
     pub output: OutputFormat,
 
     /// Pretty-print JSON/YAML output
@@ -69,15 +71,15 @@ pub struct GlobalOptions {
     pub verbose: bool,
 
     /// Override API endpoint
-    #[arg(long, env = "LINEARS_ENDPOINT")]
+    #[arg(long, env = env_const::ENDPOINT)]
     pub endpoint: Option<String>,
 
     /// Request timeout in seconds
-    #[arg(long, default_value = "30")]
+    #[arg(long, default_value_t = client_const::DEFAULT_TIMEOUT_SECS)]
     pub timeout: u64,
 
     /// Workspace slug or ID (for multi-workspace API keys)
-    #[arg(long, env = "LINEARS_WORKSPACE")]
+    #[arg(long, env = env_const::WORKSPACE)]
     pub workspace: Option<String>,
 }
 
@@ -247,7 +249,7 @@ pub struct ListOptions {
 
     /// Field selection preset
     #[arg(long, value_enum, default_value = "default")]
-    pub preset: Preset,
+    pub preset: FieldsetPreset,
 
     /// Comma-separated scalar fields to select
     #[arg(long)]
@@ -258,16 +260,6 @@ pub struct ListOptions {
     pub expand: Option<Vec<String>>,
 }
 
-/// Field selection presets
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub enum Preset {
-    /// Minimal fields (id, name/title)
-    Minimal,
-    /// Default fields
-    Default,
-    /// Wide field selection
-    Wide,
-}
 
 /// Input options for create command
 #[derive(Args, Clone)]

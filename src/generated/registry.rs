@@ -2,24 +2,14 @@
 //! Run `cargo xtask codegen` to regenerate
 
 use super::Resource;
-
-/// Field selection preset
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FieldPreset {
-    /// Minimal fields (id + name-like field)
-    Minimal,
-    /// Default fields
-    Default,
-    /// Wide field selection
-    Wide,
-}
+use crate::common::FieldsetPreset;
 
 /// Get the fields to select for a resource type with preset
-pub fn get_preset_fields(resource: Resource, preset: FieldPreset) -> &'static str {
+pub fn get_preset_fields(resource: Resource, preset: FieldsetPreset) -> &'static str {
     match preset {
-        FieldPreset::Minimal => get_minimal_fields(resource),
-        FieldPreset::Default => get_default_fields(resource),
-        FieldPreset::Wide => get_wide_fields(resource),
+        FieldsetPreset::Minimal => get_minimal_fields(resource),
+        FieldsetPreset::Default => get_default_fields(resource),
+        FieldsetPreset::Wide => get_wide_fields(resource),
     }
 }
 
