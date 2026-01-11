@@ -1,5 +1,6 @@
 //! HTTP client for Linear's GraphQL API
 
+use chrono::{Duration as ChronoDuration, Utc};
 use rand::Rng;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
@@ -22,9 +23,13 @@ pub enum ClientError {
     #[error("GraphQL error: {0}")]
     GraphQL(String),
 
-    /// Rate limited
+    /// Rate limited (retriable - wait time ≤60s)
     #[error("Rate limited: {0}")]
-    RateLimited(String),
+    RateLimited(u64),
+
+    /// Rate limited (too long to wait - >60s)
+    #[error("{0}")]
+    RateLimitedTooLong(String),
 
     /// Server error
     #[error("Server error: {0}")]
@@ -43,6 +48,7 @@ impl ClientError {
             ClientError::Network(_) => 3,
             ClientError::GraphQL(_) => 4,
             ClientError::RateLimited(_) => 1,
+            ClientError::RateLimitedTooLong(_) => 1,
             ClientError::Server(_) => 1,
             ClientError::Other(_) => 1,
         }
@@ -118,7 +124,7 @@ impl Client {
         Ok(Self { http, endpoint })
     }
 
-    /// Execute a GraphQL request with automatic retries for 5xx errors
+    /// Execute a GraphQL request with automatic retries for 5xx errors and rate limits
     pub async fn execute(&self, request: GraphQLRequest) -> Result<GraphQLResponse, ClientError> {
         let mut retries = 0;
 
@@ -140,6 +146,12 @@ impl Client {
                     );
 
                     sleep(Duration::from_millis(delay)).await;
+                }
+                Err(ClientError::RateLimited(secs)) => {
+                    // Rate limited with short wait - retry after waiting
+                    eprintln!("Rate limited. Waiting {} seconds before retrying...", secs);
+                    sleep(Duration::from_secs(secs)).await;
+                    // Continue loop without incrementing retries
                 }
                 Err(e) => {
                     // Non-retryable error or max retries reached
@@ -181,9 +193,21 @@ impl Client {
                 .and_then(|s| s.parse::<u64>().ok());
 
             if let Some(secs) = retry_after {
-                return Err(ClientError::RateLimited(format!("Retry after {} seconds", secs)));
+                if secs <= 60 {
+                    // Short wait - can be retried automatically
+                    return Err(ClientError::RateLimited(secs));
+                } else {
+                    // Too long to wait - show reset time and exit
+                    let reset_time = Utc::now() + ChronoDuration::seconds(secs as i64);
+                    let formatted = reset_time.format("%H:%M:%S UTC");
+                    return Err(ClientError::RateLimitedTooLong(format!(
+                        "Rate limited. Too long to wait ({} seconds). Rate limit resets at {}",
+                        secs, formatted
+                    )));
+                }
             } else {
-                return Err(ClientError::RateLimited("Please wait and retry".to_string()));
+                // No Retry-After header - assume short wait
+                return Err(ClientError::RateLimited(5));
             }
         }
 

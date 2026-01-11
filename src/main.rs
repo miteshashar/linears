@@ -118,6 +118,7 @@ async fn main() -> ExitCode {
                         client::ClientError::Network(_) => "network",
                         client::ClientError::GraphQL(_) => "graphql",
                         client::ClientError::RateLimited(_) => "rate_limited",
+                        client::ClientError::RateLimitedTooLong(_) => "rate_limited",
                         client::ClientError::Server(_) => "server",
                         client::ClientError::Other(_) => "other",
                     };
