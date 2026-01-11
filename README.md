@@ -85,6 +85,10 @@ linears search issue "bug in login"
 # Raw GraphQL query
 linears raw --query 'query { viewer { id name } }'
 linears raw --query ./query.graphql
+
+# Raw query with variables
+linears raw --query 'query($id: ID!) { issue(id: $id) { title } }' --var id=abc-123
+linears raw --query ./query.graphql --vars '{"teamId":"..."}'
 ```
 
 ### Mutation Commands
