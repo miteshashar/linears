@@ -220,12 +220,33 @@ cargo xtask schema sync
 cargo xtask codegen
 ```
 
+## Testing
+
+The test suite uses `cargo test` and includes:
+
+- **Integration tests** (`tests/cli_integration.rs`): End-to-end CLI testing with httpmock for API simulation
+- **Snapshot tests** (`tests/snapshot_tests.rs`): Codegen drift detection using insta
+- **Test factories** (`tests/factories/`): Deterministic data generators for consistent test data
+- **Mock server** (`tests/support/`): Helpers for simulating the Linear GraphQL API
+
+```bash
+# Run all tests
+cargo test
+
+# Run specific test
+cargo test test_list_issues_json
+
+# Update snapshots (when schema changes)
+INSTA_UPDATE=always cargo test
+```
+
 ## Project Structure
 
 ```
 linears/
 ├── src/
 │   ├── main.rs              # Entry point
+│   ├── lib.rs               # Library exports for tests
 │   ├── cli/                  # Clap command definitions
 │   ├── generated/            # Codegen output (never hand-edited)
 │   ├── query_builder/        # Query construction
@@ -235,7 +256,12 @@ linears/
 │   └── validate/             # Input validation
 ├── xtask/                    # Schema sync and codegen
 ├── schemas/linear/           # Checked-in schema
-└── tests/                    # Unit and integration tests
+└── tests/
+    ├── cli_integration.rs    # CLI integration tests
+    ├── snapshot_tests.rs     # Snapshot tests
+    ├── factories/            # Test data factories
+    ├── support/              # Mock server helpers
+    └── snapshots/            # Approved snapshot files
 ```
 
 ## License
