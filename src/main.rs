@@ -18,6 +18,7 @@ mod mutation_builder;
 mod progress;
 mod query_builder;
 mod render;
+mod schema_diff;
 mod validate;
 
 use cli::{Cli, Commands};
@@ -107,7 +108,7 @@ async fn main() -> ExitCode {
         Commands::Archive { resource, id } => cmd_archive(&cli, resource.clone(), id.clone()).await,
         Commands::Unarchive { resource, id } => cmd_unarchive(&cli, resource.clone(), id.clone()).await,
         Commands::Mutate { op, vars } => cmd_mutate(&cli, op.clone(), vars.clone()).await,
-        Commands::Schema { action } => cmd_schema(&cli, action.clone()),
+        Commands::Schema { action } => cmd_schema(&cli, action.clone()).await,
     };
 
     match result {
@@ -1201,7 +1202,7 @@ async fn cmd_mutate(
     Ok(())
 }
 
-fn cmd_schema(_cli: &Cli, action: cli::SchemaAction) -> Result<()> {
+async fn cmd_schema(_cli: &Cli, action: cli::SchemaAction) -> Result<()> {
     match action {
         cli::SchemaAction::Info => {
             let meta_path =
@@ -1235,9 +1236,39 @@ fn cmd_schema(_cli: &Cli, action: cli::SchemaAction) -> Result<()> {
             }
         }
         cli::SchemaAction::Diff => {
-            // TODO: Implement schema diff
-            println!("Schema diff not yet implemented");
-            println!("Run 'cargo xtask schema sync' to check for updates");
+            use std::path::PathBuf;
+
+            // Path to local schema
+            let schema_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("schemas")
+                .join("linear")
+                .join("schema.graphql");
+
+            if !schema_path.exists() {
+                println!("No local schema found.");
+                println!("Run 'cargo xtask schema sync' to sync the schema first.");
+                return Ok(());
+            }
+
+            println!("Fetching upstream schema from Linear SDK...");
+
+            // Fetch upstream schema
+            let upstream_content = schema_diff::fetch_upstream_schema().await?;
+
+            // Read local schema
+            let local_content = schema_diff::read_local_schema(&schema_path)?;
+
+            println!("Comparing schemas...\n");
+
+            // Compare schemas
+            let diff = schema_diff::diff_schemas(&local_content, &upstream_content)?;
+
+            // Print the diff
+            println!("{}", diff.format());
+
+            if !diff.is_empty() {
+                println!("Run 'cargo xtask schema sync' to update the local schema.");
+            }
         }
     }
 

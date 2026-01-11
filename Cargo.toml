@@ -51,6 +51,9 @@ dotenvy = "0.15"
 # Random number generation (for jitter in backoff)
 rand = "0.9"
 
+# GraphQL schema parsing (for schema diff)
+graphql-parser = "0.4"
+
 [dev-dependencies]
 # Testing
 tokio-test = "0.4"
