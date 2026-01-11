@@ -106,6 +106,9 @@ pub enum Commands {
         /// GraphQL query (inline or file path)
         #[arg(long)]
         query: String,
+
+        #[command(flatten)]
+        vars: VarsOptions,
     },
 
     /// Create a new entity

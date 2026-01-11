@@ -100,7 +100,7 @@ async fn main() -> ExitCode {
         Commands::List { resource, options } => cmd_list(&cli, resource.clone(), options.clone()).await,
         Commands::Get { resource, id } => cmd_get(&cli, resource.clone(), id.clone()).await,
         Commands::Search { resource, text } => cmd_search(&cli, resource.clone(), text.clone()).await,
-        Commands::Raw { query } => cmd_raw(&cli, query.clone()).await,
+        Commands::Raw { query, vars } => cmd_raw(&cli, query.clone(), vars.clone()).await,
         Commands::Create { resource, input } => cmd_create(&cli, resource.clone(), input.clone()).await,
         Commands::Update { resource, id, set } => cmd_update(&cli, resource.clone(), id.clone(), set.clone()).await,
         Commands::Delete { resource, id } => cmd_delete(&cli, resource.clone(), id.clone()).await,
@@ -648,9 +648,10 @@ async fn cmd_search(cli: &Cli, resource: generated::Resource, text: String) -> R
     Ok(())
 }
 
-async fn cmd_raw(cli: &Cli, query: String) -> Result<()> {
+async fn cmd_raw(cli: &Cli, query: String, vars: cli::VarsOptions) -> Result<()> {
     use client::{Client, GraphQLRequest};
     use progress::with_spinner;
+    use validate::resolve_input;
 
     // Get API key (already validated in main)
     let api_key = get_api_key().expect("API key already validated");
@@ -670,14 +671,42 @@ async fn cmd_raw(cli: &Cli, query: String) -> Result<()> {
         query
     };
 
+    // Parse variables (if any provided)
+    let mut variables = resolve_input(vars.vars.as_deref(), vars.vars_file.as_deref())
+        .unwrap_or_else(|_| serde_json::json!({}));
+
+    // Apply individual variable overrides
+    if let Some(var_overrides) = vars.var {
+        if let Some(obj) = variables.as_object_mut() {
+            for override_str in var_overrides {
+                if let Some((key, value)) = override_str.split_once('=') {
+                    // Try to parse as JSON, fallback to string
+                    let parsed_value = serde_json::from_str(value)
+                        .unwrap_or_else(|_| serde_json::Value::String(value.to_string()));
+                    obj.insert(key.to_string(), parsed_value);
+                }
+            }
+        }
+    }
+
+    // Only pass variables if they're not empty
+    let variables_for_request = if variables.as_object().map(|o| o.is_empty()).unwrap_or(true) {
+        None
+    } else {
+        Some(variables.clone())
+    };
+
     if cli.global.verbose {
         eprintln!("Query: {}", query_text);
+        if variables_for_request.is_some() {
+            eprintln!("Variables: {}", serde_json::to_string_pretty(&variables)?);
+        }
     }
 
     // Execute the query with spinner
     let request = GraphQLRequest {
         query: query_text,
-        variables: None,
+        variables: variables_for_request,
         operation_name: None,
     };
 
