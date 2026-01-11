@@ -10,8 +10,8 @@ pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, s
     let field_name = resource.field_name();
     let plural_name = plural_field_name(field_name);
 
-    // Get fields for this specific resource type
-    let node_fields = get_resource_fields(resource);
+    // Get fields for this specific resource type based on preset
+    let node_fields = get_resource_fields_for_preset(resource, options.preset);
 
     // Check if filter is provided
     let has_filter = options.filter.is_some() || options.filter_file.is_some();
@@ -87,29 +87,69 @@ pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, s
     (query, variables)
 }
 
-/// Get the fields to select for a resource type
-fn get_resource_fields(resource: Resource) -> &'static str {
-    match resource {
-        Resource::Issue => "id title identifier priority createdAt state { name }",
-        Resource::Team => "id name key description",
-        Resource::User => "id name email active",
-        Resource::Project => "id name state startDate targetDate",
-        Resource::Cycle => "id name number startsAt endsAt",
-        Resource::IssueLabel => "id name color",
-        Resource::Comment => "id body createdAt",
-        Resource::Workflow => "id name",
-        Resource::WorkflowState => "id name color type",
-        Resource::Attachment => "id title url",
-        Resource::Document => "id title createdAt",
-        Resource::Roadmap => "id name",
-        Resource::Initiative => "id name",
-        Resource::Integration => "id service",
-        Resource::Notification => "id type createdAt",
-        Resource::Webhook => "id url enabled",
-        Resource::ApiKey => "id label createdAt",
-        Resource::Viewer => "id name email",
-        Resource::Organization => "id name urlKey",
+/// Get the fields to select for a resource type with preset
+fn get_resource_fields_for_preset(resource: Resource, preset: crate::cli::Preset) -> &'static str {
+    use crate::cli::Preset;
+
+    match preset {
+        Preset::Minimal => match resource {
+            Resource::Issue => "id identifier title",
+            Resource::Team => "id name key",
+            Resource::User => "id name",
+            Resource::Project => "id name",
+            Resource::Cycle => "id name number",
+            Resource::IssueLabel => "id name",
+            Resource::Comment => "id body",
+            _ => "id",
+        },
+        Preset::Default => match resource {
+            Resource::Issue => "id title identifier priority createdAt state { name }",
+            Resource::Team => "id name key description",
+            Resource::User => "id name email active",
+            Resource::Project => "id name state startDate targetDate",
+            Resource::Cycle => "id name number startsAt endsAt",
+            Resource::IssueLabel => "id name color",
+            Resource::Comment => "id body createdAt",
+            Resource::Workflow => "id name",
+            Resource::WorkflowState => "id name color type",
+            Resource::Attachment => "id title url",
+            Resource::Document => "id title createdAt",
+            Resource::Roadmap => "id name",
+            Resource::Initiative => "id name",
+            Resource::Integration => "id service",
+            Resource::Notification => "id type createdAt",
+            Resource::Webhook => "id url enabled",
+            Resource::ApiKey => "id label createdAt",
+            Resource::Viewer => "id name email",
+            Resource::Organization => "id name urlKey",
+        },
+        Preset::Wide => match resource {
+            Resource::Issue => "id title description identifier priority createdAt updatedAt state { name color } assignee { name email } creator { name } team { name key }",
+            Resource::Team => "id name key description createdAt organization { name }",
+            Resource::User => "id name email displayName active admin createdAt",
+            Resource::Project => "id name description state startDate targetDate completedAt createdAt",
+            Resource::Cycle => "id name number description startsAt endsAt completedAt",
+            Resource::IssueLabel => "id name color description createdAt",
+            Resource::Comment => "id body createdAt updatedAt user { name }",
+            Resource::Workflow => "id name createdAt",
+            Resource::WorkflowState => "id name color type position createdAt",
+            Resource::Attachment => "id title url createdAt",
+            Resource::Document => "id title content createdAt updatedAt",
+            Resource::Roadmap => "id name description createdAt",
+            Resource::Initiative => "id name description createdAt",
+            Resource::Integration => "id service createdAt",
+            Resource::Notification => "id type createdAt readAt",
+            Resource::Webhook => "id url enabled createdAt",
+            Resource::ApiKey => "id label createdAt",
+            Resource::Viewer => "id name email displayName",
+            Resource::Organization => "id name urlKey createdAt",
+        },
     }
+}
+
+/// Get the default fields to select for a resource type
+fn get_resource_fields(resource: Resource) -> &'static str {
+    get_resource_fields_for_preset(resource, crate::cli::Preset::Default)
 }
 
 /// Build a get query for a single entity
