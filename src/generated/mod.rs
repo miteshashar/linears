@@ -4,6 +4,7 @@
 mod mutation_ops;
 mod registry;
 mod resources;
+mod search_plan;
 
 pub use mutation_ops::MutationOp;
 pub use registry::{
@@ -11,3 +12,4 @@ pub use registry::{
     get_relation_fields, get_wide_fields, FieldPreset,
 };
 pub use resources::Resource;
+pub use search_plan::{get_search_filter, get_searchable_fields, supports_search};

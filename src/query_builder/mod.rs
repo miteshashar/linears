@@ -2,7 +2,8 @@
 
 use crate::cli::ListOptions;
 use crate::generated::{
-    get_entity_fields, get_preset_fields, get_relation_fields, FieldPreset, Resource,
+    get_entity_fields, get_preset_fields, get_relation_fields, get_search_filter, FieldPreset,
+    Resource,
 };
 
 /// Build a list query for a resource
@@ -183,38 +184,7 @@ pub fn build_search_query(
     (query, variables, SearchStrategy::FilterHeuristic)
 }
 
-/// Get the filter for searching a resource
-fn get_search_filter(resource: Resource, text: &str) -> serde_json::Value {
-    match resource {
-        Resource::Issue => serde_json::json!({
-            "or": [
-                { "title": { "containsIgnoreCase": text } },
-                { "description": { "containsIgnoreCase": text } },
-            ]
-        }),
-        Resource::Team => serde_json::json!({
-            "or": [
-                { "name": { "containsIgnoreCase": text } },
-                { "key": { "containsIgnoreCase": text } },
-            ]
-        }),
-        Resource::User => serde_json::json!({
-            "or": [
-                { "name": { "containsIgnoreCase": text } },
-                { "email": { "containsIgnoreCase": text } },
-            ]
-        }),
-        Resource::Project => serde_json::json!({
-            "name": { "containsIgnoreCase": text }
-        }),
-        Resource::IssueLabel => serde_json::json!({
-            "name": { "containsIgnoreCase": text }
-        }),
-        _ => serde_json::json!({
-            "name": { "containsIgnoreCase": text }
-        }),
-    }
-}
+// Note: get_search_filter is now imported from crate::generated::search_plan
 
 /// Search strategy used
 #[derive(Debug, Clone, Copy)]

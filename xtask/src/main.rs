@@ -233,6 +233,9 @@ fn run_codegen() -> Result<()> {
     // Generate registry with field presets
     generate_registry(&ast, &generated_dir)?;
 
+    // Generate search plans
+    generate_search_plans(&ast, &generated_dir)?;
+
     // Generate mod.rs
     generate_mod_rs(&generated_dir)?;
 
@@ -783,6 +786,221 @@ fn generate_wide_fields(fields: &[FieldInfo]) -> String {
     result.join(" ")
 }
 
+/// Search plan information for a resource
+#[derive(Debug)]
+struct SearchPlan {
+    /// GraphQL query field name (e.g., "issue")
+    field_name: String,
+    /// Text-searchable fields in priority order
+    searchable_fields: Vec<String>,
+}
+
+fn generate_search_plans(
+    ast: &graphql_parser::schema::Document<String>,
+    output_dir: &PathBuf,
+) -> Result<()> {
+    use graphql_parser::schema::{Definition, InputValue, Type, TypeDefinition};
+
+    // Build a map of input type name -> fields with their types
+    let mut input_type_fields: HashMap<String, Vec<(String, String)>> = HashMap::new();
+
+    for def in &ast.definitions {
+        if let Definition::TypeDefinition(TypeDefinition::InputObject(input)) = def {
+            let fields: Vec<(String, String)> = input
+                .fields
+                .iter()
+                .map(|f| {
+                    let type_name = extract_input_type_name(&f.value_type);
+                    (f.name.clone(), type_name)
+                })
+                .collect();
+            input_type_fields.insert(input.name.clone(), fields);
+        }
+    }
+
+    // Get Query fields to find resources
+    let mut resources: Vec<String> = Vec::new();
+
+    for def in &ast.definitions {
+        if let Definition::TypeDefinition(TypeDefinition::Object(obj)) = def {
+            if obj.name == "Query" {
+                for field in &obj.fields {
+                    // Skip internal/connection fields
+                    if !field.name.ends_with("Connection")
+                        && !field.name.starts_with("_")
+                        && !field.name.starts_with("__")
+                    {
+                        resources.push(field.name.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    resources.sort();
+
+    // Build search plans by finding Filter input types
+    let mut search_plans: Vec<SearchPlan> = Vec::new();
+
+    for resource in &resources {
+        // Try to find corresponding filter type
+        // Convention: Resource -> ResourceFilter (e.g., issue -> IssueFilter)
+        let pascal_name = to_pascal_case(resource);
+        let filter_name = format!("{}Filter", pascal_name);
+
+        if let Some(fields) = input_type_fields.get(&filter_name) {
+            // Find text-searchable fields (StringComparator or NullableStringComparator)
+            let mut searchable: Vec<String> = fields
+                .iter()
+                .filter(|(_, type_name)| {
+                    type_name == "StringComparator" || type_name == "NullableStringComparator"
+                })
+                .map(|(name, _)| name.clone())
+                .collect();
+
+            // Sort by priority: title, name, identifier, description, body, content, then others
+            let priority_order = [
+                "title",
+                "name",
+                "identifier",
+                "key",
+                "description",
+                "body",
+                "content",
+                "email",
+                "url",
+            ];
+
+            searchable.sort_by(|a, b| {
+                let a_priority = priority_order.iter().position(|&x| x == a).unwrap_or(999);
+                let b_priority = priority_order.iter().position(|&x| x == b).unwrap_or(999);
+                a_priority.cmp(&b_priority)
+            });
+
+            // Only keep top 3 searchable fields to avoid overly complex queries
+            searchable.truncate(3);
+
+            if !searchable.is_empty() {
+                search_plans.push(SearchPlan {
+                    field_name: resource.clone(),
+                    searchable_fields: searchable,
+                });
+            }
+        }
+    }
+
+    // Generate search_plan.rs
+    let mut code = String::from(
+        r#"//! Generated search plans - DO NOT EDIT
+//! Run `cargo xtask codegen` to regenerate
+
+use super::Resource;
+
+/// Get the search filter for a resource with the given search text.
+/// Returns a JSON value suitable for use as a filter variable in GraphQL queries.
+/// The filter uses OR logic across text-searchable fields.
+pub fn get_search_filter(resource: Resource, text: &str) -> serde_json::Value {
+    match resource {
+"#,
+    );
+
+    // Generate match arms for resources with search plans
+    for plan in &search_plans {
+        let variant = to_pascal_case(&plan.field_name);
+
+        if plan.searchable_fields.len() == 1 {
+            // Single field - no OR needed
+            let field = &plan.searchable_fields[0];
+            code.push_str(&format!(
+                "        Resource::{} => serde_json::json!({{ \"{}\": {{ \"containsIgnoreCase\": text }} }}),\n",
+                variant, field
+            ));
+        } else {
+            // Multiple fields - use OR
+            code.push_str(&format!("        Resource::{} => serde_json::json!({{\n", variant));
+            code.push_str("            \"or\": [\n");
+            for field in &plan.searchable_fields {
+                code.push_str(&format!(
+                    "                {{ \"{}\": {{ \"containsIgnoreCase\": text }} }},\n",
+                    field
+                ));
+            }
+            code.push_str("            ]\n");
+            code.push_str("        }),\n");
+        }
+    }
+
+    // Default fallback - try "name" field
+    code.push_str(
+        r#"        _ => serde_json::json!({ "name": { "containsIgnoreCase": text } }),
+    }
+}
+
+/// Check if a resource supports text search
+pub fn supports_search(resource: Resource) -> bool {
+    match resource {
+"#,
+    );
+
+    // Generate supports_search match arms
+    for plan in &search_plans {
+        let variant = to_pascal_case(&plan.field_name);
+        code.push_str(&format!("        Resource::{} => true,\n", variant));
+    }
+
+    code.push_str(
+        r#"        _ => false,
+    }
+}
+
+/// Get the searchable fields for a resource (for debugging/documentation)
+pub fn get_searchable_fields(resource: Resource) -> &'static [&'static str] {
+    match resource {
+"#,
+    );
+
+    // Generate get_searchable_fields match arms
+    for plan in &search_plans {
+        let variant = to_pascal_case(&plan.field_name);
+        let fields_str = plan
+            .searchable_fields
+            .iter()
+            .map(|f| format!("\"{}\"", f))
+            .collect::<Vec<_>>()
+            .join(", ");
+        code.push_str(&format!(
+            "        Resource::{} => &[{}],\n",
+            variant, fields_str
+        ));
+    }
+
+    code.push_str(
+        r#"        _ => &[],
+    }
+}
+"#,
+    );
+
+    fs::write(output_dir.join("search_plan.rs"), code)?;
+    println!(
+        "  Generated search_plan.rs ({} resources with search support)",
+        search_plans.len()
+    );
+
+    Ok(())
+}
+
+/// Extract the inner type name from an input type
+fn extract_input_type_name(ty: &graphql_parser::schema::Type<String>) -> String {
+    use graphql_parser::schema::Type;
+
+    match ty {
+        Type::NamedType(name) => name.clone(),
+        Type::NonNullType(inner) => extract_input_type_name(inner),
+        Type::ListType(inner) => extract_input_type_name(inner),
+    }
+}
+
 fn generate_mod_rs(output_dir: &PathBuf) -> Result<()> {
     let code = r#"//! Generated code - DO NOT EDIT
 //! Run `cargo xtask codegen` to regenerate
@@ -790,6 +1008,7 @@ fn generate_mod_rs(output_dir: &PathBuf) -> Result<()> {
 mod mutation_ops;
 mod registry;
 mod resources;
+mod search_plan;
 
 pub use mutation_ops::MutationOp;
 pub use registry::{
@@ -797,6 +1016,7 @@ pub use registry::{
     get_relation_fields, get_wide_fields, FieldPreset,
 };
 pub use resources::Resource;
+pub use search_plan::{get_search_filter, get_searchable_fields, supports_search};
 "#;
 
     fs::write(output_dir.join("mod.rs"), code)?;
