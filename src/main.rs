@@ -356,9 +356,57 @@ async fn cmd_search(cli: &Cli, resource: generated::Resource, text: String) -> R
     Ok(())
 }
 
-async fn cmd_raw(_cli: &Cli, _query: String) -> Result<()> {
-    // TODO: Implement raw command
-    anyhow::bail!("Raw command not yet implemented")
+async fn cmd_raw(cli: &Cli, query: String) -> Result<()> {
+    use client::{Client, GraphQLRequest};
+
+    // Get API key (already validated in main)
+    let api_key = get_api_key().expect("API key already validated");
+
+    // Create client
+    let client = Client::new(
+        &api_key,
+        cli.global.endpoint.as_deref(),
+        cli.global.timeout,
+    )?;
+
+    // Read query from file if it looks like a file path
+    let query_text = if std::path::Path::new(&query).exists() {
+        std::fs::read_to_string(&query)?
+    } else {
+        query
+    };
+
+    if cli.global.verbose {
+        eprintln!("Query: {}", query_text);
+    }
+
+    // Execute the query
+    let request = GraphQLRequest {
+        query: query_text,
+        variables: None,
+        operation_name: None,
+    };
+
+    let response = client.execute(request).await?;
+
+    // Render the response
+    match cli.global.output {
+        cli::OutputFormat::Json => {
+            if cli.global.pretty {
+                println!("{}", serde_json::to_string_pretty(&response.data)?);
+            } else {
+                println!("{}", serde_json::to_string(&response.data)?);
+            }
+        }
+        cli::OutputFormat::Yaml => {
+            println!("{}", serde_yaml::to_string(&response.data)?);
+        }
+        _ => {
+            println!("{}", serde_json::to_string_pretty(&response.data)?);
+        }
+    }
+
+    Ok(())
 }
 
 async fn cmd_create(
@@ -634,12 +682,77 @@ async fn cmd_unarchive(cli: &Cli, resource: generated::Resource, id: String) -> 
 }
 
 async fn cmd_mutate(
-    _cli: &Cli,
-    _op: generated::MutationOp,
-    _vars: cli::VarsOptions,
+    cli: &Cli,
+    op: generated::MutationOp,
+    vars: cli::VarsOptions,
 ) -> Result<()> {
-    // TODO: Implement mutate command
-    anyhow::bail!("Mutate command not yet implemented")
+    use client::{Client, GraphQLRequest};
+    use mutation_builder::build_mutation;
+    use validate::resolve_input;
+
+    // Get API key (already validated in main)
+    let api_key = get_api_key().expect("API key already validated");
+
+    // Create client
+    let client = Client::new(
+        &api_key,
+        cli.global.endpoint.as_deref(),
+        cli.global.timeout,
+    )?;
+
+    // Parse variables
+    let mut variables = resolve_input(vars.vars.as_deref(), vars.vars_file.as_deref())
+        .unwrap_or_else(|_| serde_json::json!({}));
+
+    // Apply individual variable overrides
+    if let Some(var_overrides) = vars.var {
+        if let Some(obj) = variables.as_object_mut() {
+            for override_str in var_overrides {
+                if let Some((key, value)) = override_str.split_once('=') {
+                    // Try to parse as JSON, fallback to string
+                    let parsed_value = serde_json::from_str(value)
+                        .unwrap_or_else(|_| serde_json::Value::String(value.to_string()));
+                    obj.insert(key.to_string(), parsed_value);
+                }
+            }
+        }
+    }
+
+    // Build the mutation
+    let (query, _) = build_mutation(op, variables.clone());
+
+    if cli.global.verbose {
+        eprintln!("Query: {}", query);
+        eprintln!("Variables: {}", serde_json::to_string_pretty(&variables)?);
+    }
+
+    // Execute the mutation
+    let request = GraphQLRequest {
+        query,
+        variables: Some(variables),
+        operation_name: None,
+    };
+
+    let response = client.execute(request).await?;
+
+    // Render the response
+    match cli.global.output {
+        cli::OutputFormat::Json => {
+            if cli.global.pretty {
+                println!("{}", serde_json::to_string_pretty(&response.data)?);
+            } else {
+                println!("{}", serde_json::to_string(&response.data)?);
+            }
+        }
+        cli::OutputFormat::Yaml => {
+            println!("{}", serde_yaml::to_string(&response.data)?);
+        }
+        _ => {
+            println!("{}", serde_json::to_string_pretty(&response.data)?);
+        }
+    }
+
+    Ok(())
 }
 
 fn cmd_schema(_cli: &Cli, action: cli::SchemaAction) -> Result<()> {

@@ -9,24 +9,58 @@ pub fn build_mutation(
 ) -> (String, serde_json::Value) {
     let op_name = op.operation_name();
 
-    // Generic mutation template - real impl would introspect schema
-    let query = format!(
-        r#"mutation {op}($input: {op}Input!) {{
-  {op_camel}(input: $input) {{
+    // Extract resource name from operation (e.g., issueCreate -> issue)
+    let resource_name = extract_resource_name(op_name);
+    let entity_fields = get_mutation_fields(&resource_name);
+
+    // Determine if this is a delete/archive operation (no entity returned)
+    let is_status_only = op_name.ends_with("Delete") || op_name.ends_with("Archive") || op_name.ends_with("Unarchive");
+
+    let query = if is_status_only {
+        // Delete/archive operations just return success
+        format!(
+            r#"mutation {op}($id: String!) {{
+  {op_camel}(id: $id) {{
     success
-    ... on IssuePayload {{ issue {{ id identifier title }} }}
-    ... on CommentPayload {{ comment {{ id body }} }}
-    ... on TeamPayload {{ team {{ id name key }} }}
-    ... on ProjectPayload {{ project {{ id name }} }}
-    ... on CyclePayload {{ cycle {{ id name number }} }}
-    ... on IssueLabelPayload {{ issueLabel {{ id name color }} }}
   }}
 }}"#,
-        op = to_pascal_case(op_name),
-        op_camel = op_name,
-    );
+            op = to_pascal_case(op_name),
+            op_camel = op_name,
+        )
+    } else {
+        // Create/update operations return the entity
+        format!(
+            r#"mutation {op}($input: {op}Input!) {{
+  {op_camel}(input: $input) {{
+    success
+    {resource} {{
+      {entity_fields}
+    }}
+  }}
+}}"#,
+            op = to_pascal_case(op_name),
+            op_camel = op_name,
+            resource = resource_name,
+            entity_fields = entity_fields,
+        )
+    };
 
     (query, variables)
+}
+
+/// Extract resource name from operation name (e.g., issueCreate -> issue)
+fn extract_resource_name(op_name: &str) -> String {
+    // Common suffixes to strip
+    let suffixes = ["Create", "Update", "Delete", "Archive", "Unarchive"];
+
+    for suffix in suffixes {
+        if let Some(prefix) = op_name.strip_suffix(suffix) {
+            return prefix.to_string();
+        }
+    }
+
+    // Fallback: just use the op_name
+    op_name.to_string()
 }
 
 /// Build a create mutation for a resource
