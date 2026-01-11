@@ -33,14 +33,14 @@ else
     ((FAIL++))
 fi
 
-# Test 3: Search returns JSON with nodes (issues now in field)
-echo -n "Test 3: Search returns JSON with issues field... "
+# Test 3: Search returns JSON with nodes array (envelope uses "nodes" for list data)
+echo -n "Test 3: Search returns JSON with nodes array... "
 output=$(./target/debug/linears --out json search issue "test" 2>&1)
-if echo "$output" | grep -q "issues"; then
+if echo "$output" | grep -q '"nodes"'; then
     echo "PASS"
     ((PASS++))
 else
-    echo "FAIL (no issues in output)"
+    echo "FAIL (no nodes in output)"
     echo "Output: $output"
     ((FAIL++))
 fi
