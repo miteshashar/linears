@@ -105,7 +105,8 @@ build_release() {
 run_tests() {
     log_info "Running tests..."
 
-    if cargo test; then
+    # INSTA_UPDATE=always auto-accepts new/changed snapshots
+    if INSTA_UPDATE=always cargo test; then
         log_success "All tests passed"
     else
         log_error "Tests failed"

@@ -3,7 +3,10 @@
 //! These tests verify that codegen output is stable and catch unintended changes.
 //! Run `cargo insta test` to review snapshots after changes.
 
+use linears::cli::{ListOptions, Preset};
 use linears::generated::{MutationOp, Resource};
+use linears::mutation_builder::build_mutation;
+use linears::query_builder::{build_get_query, build_list_query, build_search_query};
 
 /// Snapshot all Resource enum variants
 #[test]
@@ -92,4 +95,107 @@ fn key_mutations_snapshot() {
         .collect();
 
     insta::assert_yaml_snapshot!("key_mutations", names);
+}
+
+// ============================================================================
+// Query String Snapshots (per PRD §10)
+// These catch field selection drift - if codegen changes field selection,
+// these snapshots will fail.
+// ============================================================================
+
+/// Default list options for snapshot consistency
+fn default_list_options() -> ListOptions {
+    ListOptions {
+        first: Some(20),
+        after: None,
+        last: None,
+        before: None,
+        all: false,
+        include_archived: false,
+        order_by: None,
+        filter: None,
+        filter_file: None,
+        preset: Preset::Default,
+        select: None,
+        expand: None,
+    }
+}
+
+/// Snapshot list query for key resources
+/// Tests the generated GraphQL query text and field selection
+#[test]
+fn query_snapshot_list_resources() {
+    use Resource::*;
+
+    // Key resources to snapshot (most commonly used)
+    let resources = vec![Issues, Teams, Users, Projects, Cycles, Comments, IssueLabels];
+
+    let mut queries = Vec::new();
+    for resource in resources {
+        let (query, _vars) = build_list_query(resource, &default_list_options());
+        queries.push(format!("=== {} ===\n{}", resource.field_name(), query));
+    }
+
+    insta::assert_snapshot!("list_queries", queries.join("\n\n"));
+}
+
+/// Snapshot get query for key resources
+/// Tests single entity retrieval queries
+#[test]
+fn query_snapshot_get_resources() {
+    use Resource::*;
+
+    // Key singular resources (for get operations)
+    let resources = vec![Issue, Team, User, Project, Cycle, Comment, IssueLabel];
+
+    let mut queries = Vec::new();
+    for resource in resources {
+        let (query, _vars) = build_get_query(resource, "test-id-123");
+        queries.push(format!("=== {} ===\n{}", resource.field_name(), query));
+    }
+
+    insta::assert_snapshot!("get_queries", queries.join("\n\n"));
+}
+
+/// Snapshot search query for resources that support search
+/// Tests filter-based search query generation
+#[test]
+fn query_snapshot_search_resources() {
+    use Resource::*;
+
+    // Resources with searchable fields
+    let resources = vec![Issues, Teams, Users, Projects, Comments];
+
+    let mut queries = Vec::new();
+    for resource in resources {
+        let (query, _vars, _strategy) = build_search_query(resource, "test search");
+        queries.push(format!("=== {} ===\n{}", resource.field_name(), query));
+    }
+
+    insta::assert_snapshot!("search_queries", queries.join("\n\n"));
+}
+
+/// Snapshot mutation queries for key operations
+/// Tests mutation document structure and entity field selection
+#[test]
+fn mutation_snapshot_selected_ops() {
+    use MutationOp::*;
+
+    // Representative mutations covering different patterns
+    let test_cases = vec![
+        (IssueCreate, r#"{"input":{"title":"Test","teamId":"..."}}"#),
+        (IssueUpdate, r#"{"input":{"title":"Updated"}}"#),
+        (IssueDelete, r#"{"id":"test-123"}"#),
+        (CommentCreate, r#"{"input":{"body":"Test comment","issueId":"..."}}"#),
+        (ProjectCreate, r#"{"input":{"name":"Test Project","teamIds":["..."]}}"#),
+    ];
+
+    let mut queries = Vec::new();
+    for (op, vars_json) in test_cases {
+        let vars: serde_json::Value = serde_json::from_str(vars_json).unwrap();
+        let (query, _) = build_mutation(op, vars);
+        queries.push(format!("=== {} ===\n{}", op.operation_name(), query));
+    }
+
+    insta::assert_snapshot!("mutation_queries", queries.join("\n\n"));
 }

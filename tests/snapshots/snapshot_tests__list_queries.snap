@@ -1,0 +1,108 @@
+---
+source: tests/snapshot_tests.rs
+expression: "queries.join(\"\\n\\n\")"
+---
+=== issues ===
+query ListIssues($first: Int, $after: String, $last: Int, $before: String, $includeArchived: Boolean) {
+  issues(first: $first, after: $after, last: $last, before: $before, includeArchived: $includeArchived) {
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }
+    nodes {
+      id
+    }
+  }
+}
+
+=== teams ===
+query ListTeams($first: Int, $after: String, $last: Int, $before: String, $includeArchived: Boolean) {
+  teams(first: $first, after: $after, last: $last, before: $before, includeArchived: $includeArchived) {
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }
+    nodes {
+      id
+    }
+  }
+}
+
+=== users ===
+query ListUsers($first: Int, $after: String, $last: Int, $before: String, $includeArchived: Boolean) {
+  users(first: $first, after: $after, last: $last, before: $before, includeArchived: $includeArchived) {
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }
+    nodes {
+      id
+    }
+  }
+}
+
+=== projects ===
+query ListProjects($first: Int, $after: String, $last: Int, $before: String, $includeArchived: Boolean) {
+  projects(first: $first, after: $after, last: $last, before: $before, includeArchived: $includeArchived) {
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }
+    nodes {
+      id
+    }
+  }
+}
+
+=== cycles ===
+query ListCycles($first: Int, $after: String, $last: Int, $before: String, $includeArchived: Boolean) {
+  cycles(first: $first, after: $after, last: $last, before: $before, includeArchived: $includeArchived) {
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }
+    nodes {
+      id
+    }
+  }
+}
+
+=== comments ===
+query ListComments($first: Int, $after: String, $last: Int, $before: String, $includeArchived: Boolean) {
+  comments(first: $first, after: $after, last: $last, before: $before, includeArchived: $includeArchived) {
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }
+    nodes {
+      id
+    }
+  }
+}
+
+=== issueLabels ===
+query ListIssueLabels($first: Int, $after: String, $last: Int, $before: String, $includeArchived: Boolean) {
+  issueLabels(first: $first, after: $after, last: $last, before: $before, includeArchived: $includeArchived) {
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }
+    nodes {
+      id
+    }
+  }
+}

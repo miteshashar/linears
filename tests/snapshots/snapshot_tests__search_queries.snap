@@ -1,0 +1,48 @@
+---
+source: tests/snapshot_tests.rs
+expression: "queries.join(\"\\n\\n\")"
+---
+=== issues ===
+query SearchIssues($filter: IssuesFilter, $first: Int) {
+  issues(filter: $filter, first: $first) {
+    nodes {
+      id
+    }
+  }
+}
+
+=== teams ===
+query SearchTeams($filter: TeamsFilter, $first: Int) {
+  teams(filter: $filter, first: $first) {
+    nodes {
+      id
+    }
+  }
+}
+
+=== users ===
+query SearchUsers($filter: UsersFilter, $first: Int) {
+  users(filter: $filter, first: $first) {
+    nodes {
+      id
+    }
+  }
+}
+
+=== projects ===
+query SearchProjects($filter: ProjectsFilter, $first: Int) {
+  projects(filter: $filter, first: $first) {
+    nodes {
+      id
+    }
+  }
+}
+
+=== comments ===
+query SearchComments($filter: CommentsFilter, $first: Int) {
+  comments(filter: $filter, first: $first) {
+    nodes {
+      id
+    }
+  }
+}

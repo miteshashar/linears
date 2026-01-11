@@ -1,0 +1,50 @@
+---
+source: tests/snapshot_tests.rs
+expression: "queries.join(\"\\n\\n\")"
+---
+=== issueCreate ===
+mutation IssueCreate($input: IssueCreateInput!) {
+  issueCreate(input: $input) {
+    success
+    issue {
+      id identifier title
+    }
+  }
+}
+
+=== issueUpdate ===
+mutation IssueUpdate($input: IssueUpdateInput!) {
+  issueUpdate(input: $input) {
+    success
+    issue {
+      id identifier title
+    }
+  }
+}
+
+=== issueDelete ===
+mutation IssueDelete($id: String!) {
+  issueDelete(id: $id) {
+    success
+  }
+}
+
+=== commentCreate ===
+mutation CommentCreate($input: CommentCreateInput!) {
+  commentCreate(input: $input) {
+    success
+    comment {
+      id url
+    }
+  }
+}
+
+=== projectCreate ===
+mutation ProjectCreate($input: ProjectCreateInput!) {
+  projectCreate(input: $input) {
+    success
+    project {
+      id name
+    }
+  }
+}

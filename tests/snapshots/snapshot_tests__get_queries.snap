@@ -1,0 +1,52 @@
+---
+source: tests/snapshot_tests.rs
+expression: "queries.join(\"\\n\\n\")"
+---
+=== issue ===
+query GetIssue($id: String!) {
+  issue(id: $id) {
+    id addedToCycleAt addedToProjectAt addedToTeamAt archivedAt autoArchivedAt autoClosedAt branchName canceledAt completedAt createdAt customerTicketCount description dueDate estimate identifier labelIds number previousIdentifiers priority priorityLabel prioritySortOrder slaBreachesAt slaHighRiskAt slaMediumRiskAt slaStartedAt slaType snoozedUntilAt startedAt startedTriageAt suggestionsGeneratedAt title trashed triagedAt updatedAt url state { name color type } assignee { name email } creator { name } team { name key } project { name } cycle { name number }
+  }
+}
+
+=== team ===
+query GetTeam($id: String!) {
+  team(id: $id) {
+    id aiDiscussionSummariesEnabled aiThreadSummariesEnabled allMembersCanJoin archivedAt autoArchivePeriod autoCloseChildIssues autoCloseParentIssues autoClosePeriod autoCloseStateId color createdAt currentProgress cycleCalenderUrl cycleCooldownTime cycleDuration cycleIssueAutoAssignCompleted cycleIssueAutoAssignStarted cycleLockToActive cycleStartDay cyclesEnabled defaultIssueEstimate defaultTemplateForMembersId defaultTemplateForNonMembersId description displayName groupIssueHistory icon inheritIssueEstimation inheritWorkflowStatuses inviteHash issueEstimationAllowZero issueEstimationExtended issueEstimationType issueOrderingNoPriorityFirst issueSortOrderDefaultToBottom joinByDefault key name private progressHistory requirePriorityToLeaveTriage scimGroupName scimManaged securitySettings setIssueSortOrderOnStateChange slackIssueComments slackIssueStatuses slackNewIssue timezone triageEnabled upcomingCycleCount updatedAt organization { name }
+  }
+}
+
+=== user ===
+query GetUser($id: String!) {
+  user(id: $id) {
+    id active admin app archivedAt avatarBackgroundColor avatarUrl calendarHash canAccessAnyPublicTeam createdAt createdIssueCount description disableReason displayName email gitHubUserId guest initials inviteHash isAssignable isMe isMentionable lastSeen name owner statusEmoji statusLabel statusUntilAt supportsAgentSessions timezone updatedAt url organization { name }
+  }
+}
+
+=== project ===
+query GetProject($id: String!) {
+  project(id: $id) {
+    id archivedAt autoArchivedAt canceledAt color completedAt completedIssueCountHistory completedScopeHistory content contentState createdAt currentProgress description healthUpdatedAt icon inProgressScopeHistory issueCountHistory labelIds name priority priorityLabel prioritySortOrder progress progressHistory projectUpdateRemindersPausedUntilAt scope scopeHistory slackIssueComments slackIssueStatuses slackNewIssue slugId startDate startedAt state targetDate trashed updateReminderFrequency updateReminderFrequencyInWeeks updateRemindersHour updatedAt url creator { name }
+  }
+}
+
+=== cycle ===
+query GetCycle($id: String!) {
+  cycle(id: $id) {
+    id archivedAt autoArchivedAt completedAt completedIssueCountHistory completedScopeHistory createdAt currentProgress description endsAt inProgressScopeHistory isActive isFuture isNext isPast isPrevious issueCountHistory name number progress progressHistory scopeHistory startsAt updatedAt team { name key }
+  }
+}
+
+=== comment ===
+query GetComment($id: String!) {
+  comment(id: $id) {
+    id archivedAt body bodyData createdAt documentContentId editedAt initiativeUpdateId issueId parentId projectUpdateId quotedText resolvedAt resolvingCommentId threadSummary updatedAt url user { name }
+  }
+}
+
+=== issueLabel ===
+query GetIssueLabel($id: String!) {
+  issueLabel(id: $id) {
+    id archivedAt color createdAt description isGroup lastAppliedAt name retiredAt updatedAt creator { name } team { name key } organization { name }
+  }
+}
