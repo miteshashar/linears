@@ -317,21 +317,39 @@ async fn cmd_get(cli: &Cli, resource: generated::Resource, id: String) -> Result
 
     let response = client.execute(request).await?;
 
-    // Render the response
+    // Extract entity from response
+    let data = response.data.unwrap_or_default();
+    let resource_name = resource.field_name();
+    let entity = data.get(resource_name).cloned().unwrap_or_default();
+
+    // Render the response with proper envelope
     match cli.global.output {
         cli::OutputFormat::Json => {
+            let output = serde_json::json!({
+                "resource": resource_name,
+                "operation": "get",
+                "entity": entity,
+            });
             if cli.global.pretty {
-                println!("{}", serde_json::to_string_pretty(&response.data)?);
+                println!("{}", serde_json::to_string_pretty(&output)?);
             } else {
-                println!("{}", serde_json::to_string(&response.data)?);
+                println!("{}", serde_json::to_string(&output)?);
             }
         }
         cli::OutputFormat::Yaml => {
-            println!("{}", serde_yaml::to_string(&response.data)?);
+            let output = serde_json::json!({
+                "resource": resource_name,
+                "operation": "get",
+                "entity": entity,
+            });
+            println!("{}", serde_yaml::to_string(&output)?);
+        }
+        cli::OutputFormat::Ndjson => {
+            println!("{}", serde_json::to_string(&entity)?);
         }
         _ => {
-            // For table/text/ndjson, just print JSON for now
-            println!("{}", serde_json::to_string_pretty(&response.data)?);
+            // For table/text, just print YAML for readability
+            println!("{}", serde_yaml::to_string(&entity)?);
         }
     }
 
