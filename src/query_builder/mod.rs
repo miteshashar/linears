@@ -1,7 +1,9 @@
 //! Query construction for list, get, and search operations
 
 use crate::cli::ListOptions;
-use crate::generated::Resource;
+use crate::generated::{
+    get_entity_fields, get_preset_fields, get_relation_fields, FieldPreset, Resource,
+};
 
 /// Build a list query for a resource
 pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, serde_json::Value) {
@@ -109,61 +111,15 @@ pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, s
 }
 
 /// Get the fields to select for a resource type with preset
+/// Delegates to generated registry
 fn get_resource_fields_for_preset(resource: Resource, preset: crate::cli::Preset) -> &'static str {
-    use crate::cli::Preset;
-
-    match preset {
-        Preset::Minimal => match resource {
-            Resource::Issue => "id identifier title",
-            Resource::Team => "id name key",
-            Resource::User => "id name",
-            Resource::Project => "id name",
-            Resource::Cycle => "id name number",
-            Resource::IssueLabel => "id name",
-            Resource::Comment => "id body",
-            _ => "id",
-        },
-        Preset::Default => match resource {
-            Resource::Issue => "id title identifier priority createdAt state { name }",
-            Resource::Team | Resource::Teams => "id name key description",
-            Resource::User | Resource::Users => "id name email active",
-            Resource::Project | Resource::Projects => "id name state startDate targetDate",
-            Resource::Cycle | Resource::Cycles => "id name number startsAt endsAt",
-            Resource::IssueLabel | Resource::IssueLabels => "id name color",
-            Resource::Comment | Resource::Comments => "id body createdAt",
-            Resource::WorkflowState | Resource::WorkflowStates => "id name color type",
-            Resource::Attachment | Resource::Attachments => "id title url",
-            Resource::Document | Resource::Documents => "id title createdAt",
-            Resource::Roadmap | Resource::Roadmaps => "id name",
-            Resource::Initiative | Resource::Initiatives => "id name",
-            Resource::Integration | Resource::Integrations => "id service",
-            Resource::Notification | Resource::Notifications => "id type createdAt",
-            Resource::Webhook | Resource::Webhooks => "id url enabled",
-            Resource::Viewer => "id name email",
-            Resource::Organization => "id name urlKey",
-            _ => "id",
-        },
-        Preset::Wide => match resource {
-            Resource::Issue => "id title description identifier priority createdAt updatedAt state { name color } assignee { name email } creator { name } team { name key }",
-            Resource::Team | Resource::Teams => "id name key description createdAt organization { name }",
-            Resource::User | Resource::Users => "id name email displayName active admin createdAt",
-            Resource::Project | Resource::Projects => "id name description state startDate targetDate completedAt createdAt",
-            Resource::Cycle | Resource::Cycles => "id name number description startsAt endsAt completedAt",
-            Resource::IssueLabel | Resource::IssueLabels => "id name color description createdAt",
-            Resource::Comment | Resource::Comments => "id body createdAt updatedAt user { name }",
-            Resource::WorkflowState | Resource::WorkflowStates => "id name color type position createdAt",
-            Resource::Attachment | Resource::Attachments => "id title url createdAt",
-            Resource::Document | Resource::Documents => "id title content createdAt updatedAt",
-            Resource::Roadmap | Resource::Roadmaps => "id name description createdAt",
-            Resource::Initiative | Resource::Initiatives => "id name description createdAt",
-            Resource::Integration | Resource::Integrations => "id service createdAt",
-            Resource::Notification | Resource::Notifications => "id type createdAt readAt",
-            Resource::Webhook | Resource::Webhooks => "id url enabled createdAt",
-            Resource::Viewer => "id name email displayName",
-            Resource::Organization => "id name urlKey createdAt",
-            _ => "id",
-        },
-    }
+    // Convert cli::Preset to generated::FieldPreset
+    let field_preset = match preset {
+        crate::cli::Preset::Minimal => FieldPreset::Minimal,
+        crate::cli::Preset::Default => FieldPreset::Default,
+        crate::cli::Preset::Wide => FieldPreset::Wide,
+    };
+    get_preset_fields(resource, field_preset)
 }
 
 /// Get the default fields to select for a resource type
@@ -174,6 +130,7 @@ fn get_resource_fields(resource: Resource) -> &'static str {
 /// Build a get query for a single entity
 pub fn build_get_query(resource: Resource, id: &str) -> (String, serde_json::Value) {
     let field_name = resource.field_name();
+    // Use generated registry for entity fields (wide preset)
     let entity_fields = get_entity_fields(resource);
 
     let query = format!(
@@ -192,30 +149,6 @@ pub fn build_get_query(resource: Resource, id: &str) -> (String, serde_json::Val
     });
 
     (query, variables)
-}
-
-/// Get the fields to select for a single entity (more detailed than list)
-fn get_entity_fields(resource: Resource) -> &'static str {
-    match resource {
-        Resource::Issue => "id title description identifier priority createdAt updatedAt state { name } assignee { name } creator { name } team { name key }",
-        Resource::Team | Resource::Teams => "id name key description createdAt",
-        Resource::User | Resource::Users => "id name email active admin createdAt",
-        Resource::Project | Resource::Projects => "id name description state startDate targetDate createdAt",
-        Resource::Cycle | Resource::Cycles => "id name number startsAt endsAt completedAt",
-        Resource::IssueLabel | Resource::IssueLabels => "id name color description createdAt",
-        Resource::Comment | Resource::Comments => "id body createdAt updatedAt user { name }",
-        Resource::WorkflowState | Resource::WorkflowStates => "id name color type position",
-        Resource::Attachment | Resource::Attachments => "id title url createdAt",
-        Resource::Document | Resource::Documents => "id title content createdAt updatedAt",
-        Resource::Roadmap | Resource::Roadmaps => "id name description createdAt",
-        Resource::Initiative | Resource::Initiatives => "id name description createdAt",
-        Resource::Integration | Resource::Integrations => "id service createdAt",
-        Resource::Notification | Resource::Notifications => "id type createdAt readAt",
-        Resource::Webhook | Resource::Webhooks => "id url enabled createdAt",
-        Resource::Viewer => "id name email",
-        Resource::Organization => "id name urlKey createdAt",
-        _ => "id",
-    }
 }
 
 /// Build a search query
@@ -344,20 +277,7 @@ fn parse_expand_spec(spec: &str) -> String {
 }
 
 /// Get default fields for a relation expansion
+/// Delegates to generated registry
 fn get_default_relation_fields(relation: &str) -> &'static str {
-    match relation {
-        "team" => "id name key",
-        "assignee" | "creator" | "user" => "id name email",
-        "state" => "id name color type",
-        "project" => "id name",
-        "cycle" => "id name number",
-        "parent" => "id identifier title",
-        "labels" => "nodes { id name color }",
-        "comments" => "nodes { id body }",
-        "attachments" => "nodes { id title url }",
-        "subscribers" => "nodes { id name }",
-        "children" => "nodes { id identifier title }",
-        "organization" => "id name urlKey",
-        _ => "id",
-    }
+    get_relation_fields(relation)
 }

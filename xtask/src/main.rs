@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand};
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -229,6 +230,9 @@ fn run_codegen() -> Result<()> {
     // Generate mutation ops enum
     generate_mutation_ops(&ast, &generated_dir)?;
 
+    // Generate registry with field presets
+    generate_registry(&ast, &generated_dir)?;
+
     // Generate mod.rs
     generate_mod_rs(&generated_dir)?;
 
@@ -426,14 +430,372 @@ impl MutationOp {
     Ok(())
 }
 
+/// Field information extracted from schema
+#[derive(Debug, Clone)]
+struct FieldInfo {
+    name: String,
+    is_scalar: bool,
+    type_name: String,
+    has_arguments: bool,
+}
+
+/// Resource information with its fields
+#[derive(Debug)]
+struct ResourceInfo {
+    /// GraphQL query field name (e.g., "issue")
+    field_name: String,
+    /// Return type name (e.g., "Issue")
+    type_name: String,
+    /// All fields on this type
+    fields: Vec<FieldInfo>,
+}
+
+fn generate_registry(
+    ast: &graphql_parser::schema::Document<String>,
+    output_dir: &PathBuf,
+) -> Result<()> {
+    use graphql_parser::schema::{Definition, Type, TypeDefinition};
+
+    // Step 1: Build a map of type name -> fields
+    let mut type_fields: HashMap<String, Vec<FieldInfo>> = HashMap::new();
+
+    for def in &ast.definitions {
+        if let Definition::TypeDefinition(TypeDefinition::Object(obj)) = def {
+            let fields: Vec<FieldInfo> = obj
+                .fields
+                .iter()
+                .map(|f| {
+                    let (type_name, is_scalar) = extract_type_info(&f.field_type);
+                    FieldInfo {
+                        name: f.name.clone(),
+                        is_scalar,
+                        type_name,
+                        has_arguments: !f.arguments.is_empty(),
+                    }
+                })
+                .collect();
+            type_fields.insert(obj.name.clone(), fields);
+        }
+    }
+
+    // Step 2: Get Query fields and their return types
+    let mut resources: Vec<ResourceInfo> = Vec::new();
+
+    for def in &ast.definitions {
+        if let Definition::TypeDefinition(TypeDefinition::Object(obj)) = def {
+            if obj.name == "Query" {
+                for field in &obj.fields {
+                    // Skip internal/connection fields
+                    if field.name.ends_with("Connection")
+                        || field.name.starts_with("_")
+                        || field.name.starts_with("__")
+                    {
+                        continue;
+                    }
+
+                    let (return_type, _) = extract_type_info(&field.field_type);
+
+                    // Get the fields for this return type
+                    if let Some(fields) = type_fields.get(&return_type) {
+                        resources.push(ResourceInfo {
+                            field_name: field.name.clone(),
+                            type_name: return_type,
+                            fields: fields.clone(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    resources.sort_by(|a, b| a.field_name.cmp(&b.field_name));
+
+    // Step 3: Generate registry.rs
+    let mut code = String::from(
+        r#"//! Generated field registry - DO NOT EDIT
+//! Run `cargo xtask codegen` to regenerate
+
+use super::Resource;
+
+/// Field selection preset
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FieldPreset {
+    /// Minimal fields (id + name-like field)
+    Minimal,
+    /// Default fields
+    Default,
+    /// Wide field selection
+    Wide,
+}
+
+/// Get the fields to select for a resource type with preset
+pub fn get_preset_fields(resource: Resource, preset: FieldPreset) -> &'static str {
+    match preset {
+        FieldPreset::Minimal => get_minimal_fields(resource),
+        FieldPreset::Default => get_default_fields(resource),
+        FieldPreset::Wide => get_wide_fields(resource),
+    }
+}
+
+/// Get minimal fields (id + name-like field)
+pub fn get_minimal_fields(resource: Resource) -> &'static str {
+    match resource {
+"#,
+    );
+
+    // Generate minimal presets
+    for res in &resources {
+        let variant = to_pascal_case(&res.field_name);
+        let fields = generate_minimal_fields(&res.fields);
+        code.push_str(&format!(
+            "        Resource::{} => \"{}\",\n",
+            variant, fields
+        ));
+    }
+
+    // Add catch-all pattern
+    code.push_str("        _ => \"id\",\n");
+
+    code.push_str(
+        r#"    }
+}
+
+/// Get default fields (minimal + createdAt + key relations)
+pub fn get_default_fields(resource: Resource) -> &'static str {
+    match resource {
+"#,
+    );
+
+    // Generate default presets
+    for res in &resources {
+        let variant = to_pascal_case(&res.field_name);
+        let fields = generate_default_fields(&res.fields);
+        code.push_str(&format!(
+            "        Resource::{} => \"{}\",\n",
+            variant, fields
+        ));
+    }
+
+    // Add catch-all pattern
+    code.push_str("        _ => \"id\",\n");
+
+    code.push_str(
+        r#"    }
+}
+
+/// Get wide fields (all scalar fields + relations with name)
+pub fn get_wide_fields(resource: Resource) -> &'static str {
+    match resource {
+"#,
+    );
+
+    // Generate wide presets
+    for res in &resources {
+        let variant = to_pascal_case(&res.field_name);
+        let fields = generate_wide_fields(&res.fields);
+        code.push_str(&format!(
+            "        Resource::{} => \"{}\",\n",
+            variant, fields
+        ));
+    }
+
+    // Add catch-all pattern
+    code.push_str("        _ => \"id\",\n");
+
+    code.push_str(
+        r#"    }
+}
+
+/// Get default fields for single entity queries (more detailed)
+pub fn get_entity_fields(resource: Resource) -> &'static str {
+    // For single entity queries, use wide preset
+    get_wide_fields(resource)
+}
+
+/// Get default fields for relation expansion
+pub fn get_relation_fields(relation: &str) -> &'static str {
+    match relation {
+        "team" => "id name key",
+        "assignee" | "creator" | "user" => "id name email",
+        "state" => "id name color type",
+        "project" => "id name",
+        "cycle" => "id name number",
+        "parent" => "id identifier title",
+        "labels" => "nodes { id name color }",
+        "comments" => "nodes { id body }",
+        "attachments" => "nodes { id title url }",
+        "subscribers" => "nodes { id name }",
+        "children" => "nodes { id identifier title }",
+        "organization" => "id name urlKey",
+        _ => "id",
+    }
+}
+"#,
+    );
+
+    fs::write(output_dir.join("registry.rs"), code)?;
+    println!("  Generated registry.rs ({} resources)", resources.len());
+
+    Ok(())
+}
+
+/// Extract type name and whether it's a scalar from a GraphQL type
+fn extract_type_info(ty: &graphql_parser::schema::Type<String>) -> (String, bool) {
+    use graphql_parser::schema::Type;
+
+    match ty {
+        Type::NamedType(name) => {
+            let is_scalar = is_scalar_type(name);
+            (name.clone(), is_scalar)
+        }
+        Type::NonNullType(inner) => extract_type_info(inner),
+        Type::ListType(inner) => extract_type_info(inner),
+    }
+}
+
+/// Check if a type name is a scalar type
+fn is_scalar_type(name: &str) -> bool {
+    matches!(
+        name,
+        "ID" | "String"
+            | "Int"
+            | "Float"
+            | "Boolean"
+            | "DateTime"
+            | "JSON"
+            | "JSONObject"
+            | "TimelessDate"
+            | "UUID"
+    )
+}
+
+/// Name-like fields in order of preference
+const NAME_FIELDS: &[&str] = &[
+    "identifier",
+    "title",
+    "name",
+    "key",
+    "number",
+    "url",
+    "email",
+    "body",
+    "service",
+    "type",
+];
+
+/// Generate minimal fields (id + first name-like field found)
+fn generate_minimal_fields(fields: &[FieldInfo]) -> String {
+    let mut result = vec!["id".to_string()];
+
+    // Find first name-like field
+    for name_field in NAME_FIELDS {
+        if fields
+            .iter()
+            .any(|f| f.name == *name_field && f.is_scalar && !f.has_arguments)
+        {
+            result.push(name_field.to_string());
+            break;
+        }
+    }
+
+    result.join(" ")
+}
+
+/// Generate default fields (minimal + createdAt + state if exists)
+fn generate_default_fields(fields: &[FieldInfo]) -> String {
+    let mut result = vec!["id".to_string()];
+
+    // Add name-like fields (can have multiple for default)
+    for name_field in NAME_FIELDS.iter().take(3) {
+        if fields
+            .iter()
+            .any(|f| f.name == *name_field && f.is_scalar && !f.has_arguments)
+        {
+            result.push(name_field.to_string());
+        }
+    }
+
+    // Add common timestamp fields
+    for field in ["createdAt", "updatedAt"] {
+        if fields
+            .iter()
+            .any(|f| f.name == field && f.is_scalar && !f.has_arguments)
+        {
+            result.push(field.to_string());
+            break; // Only add one timestamp field for default
+        }
+    }
+
+    // Add state relation if exists (common pattern)
+    if fields.iter().any(|f| f.name == "state" && !f.is_scalar) {
+        result.push("state { name }".to_string());
+    }
+
+    result.join(" ")
+}
+
+/// Generate wide fields (all useful scalar fields + key relations)
+fn generate_wide_fields(fields: &[FieldInfo]) -> String {
+    let mut result = vec!["id".to_string()];
+
+    // Skip internal/less useful fields
+    let skip_fields = [
+        "activitySummary",
+        "descriptionState",
+        "reactionData",
+        "sortOrder",
+        "boardOrder",
+        "subIssueSortOrder",
+        "contextualMetadata",
+        "signalMetadata",
+        "sourceMetadata",
+    ];
+
+    // Add all simple scalar fields (no arguments)
+    for field in fields {
+        if field.is_scalar
+            && !field.has_arguments
+            && field.name != "id"
+            && !skip_fields.contains(&field.name.as_str())
+        {
+            result.push(field.name.clone());
+        }
+    }
+
+    // Add key relations with their name field
+    let key_relations = [
+        ("state", "name color type"),
+        ("assignee", "name email"),
+        ("creator", "name"),
+        ("team", "name key"),
+        ("user", "name"),
+        ("project", "name"),
+        ("cycle", "name number"),
+        ("organization", "name"),
+    ];
+
+    for (rel_name, rel_fields) in key_relations {
+        if fields.iter().any(|f| f.name == rel_name && !f.is_scalar) {
+            result.push(format!("{} {{ {} }}", rel_name, rel_fields));
+        }
+    }
+
+    result.join(" ")
+}
+
 fn generate_mod_rs(output_dir: &PathBuf) -> Result<()> {
     let code = r#"//! Generated code - DO NOT EDIT
 //! Run `cargo xtask codegen` to regenerate
 
 mod mutation_ops;
+mod registry;
 mod resources;
 
 pub use mutation_ops::MutationOp;
+pub use registry::{
+    get_default_fields, get_entity_fields, get_minimal_fields, get_preset_fields,
+    get_relation_fields, get_wide_fields, FieldPreset,
+};
 pub use resources::Resource;
 "#;
 
