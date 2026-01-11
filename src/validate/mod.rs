@@ -4,14 +4,37 @@ use anyhow::{Context, Result};
 use std::io::{self, Read};
 
 /// Parse input from JSON or YAML string
+/// Returns an error if the input is not a valid JSON/YAML object
 pub fn parse_input(input: &str) -> Result<serde_json::Value> {
     // Try JSON first
-    if let Ok(value) = serde_json::from_str(input) {
-        return Ok(value);
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(input) {
+        if value.is_object() {
+            return Ok(value);
+        }
+        anyhow::bail!("Input must be a JSON/YAML object, got: {}", value_type_name(&value));
     }
 
     // Try YAML
-    serde_yaml::from_str(input).context("Failed to parse input as JSON or YAML")
+    let value: serde_json::Value = serde_yaml::from_str(input)
+        .context("Failed to parse input as JSON or YAML")?;
+
+    if value.is_object() {
+        Ok(value)
+    } else {
+        anyhow::bail!("Input must be a JSON/YAML object, got: {}", value_type_name(&value))
+    }
+}
+
+/// Get a human-readable name for a JSON value type
+fn value_type_name(value: &serde_json::Value) -> &'static str {
+    match value {
+        serde_json::Value::Null => "null",
+        serde_json::Value::Bool(_) => "boolean",
+        serde_json::Value::Number(_) => "number",
+        serde_json::Value::String(_) => "string",
+        serde_json::Value::Array(_) => "array",
+        serde_json::Value::Object(_) => "object",
+    }
 }
 
 /// Read input from stdin
@@ -129,5 +152,24 @@ mod tests {
     fn test_parse_input_yaml() {
         let result = parse_input("title: Test").unwrap();
         assert_eq!(result["title"], "Test");
+    }
+
+    #[test]
+    fn test_parse_input_invalid() {
+        // Test that non-object inputs are rejected
+        let result = parse_input("invalid{json");
+        assert!(result.is_err(), "Expected error for non-object input");
+
+        // A plain string should also fail
+        let result = parse_input("just a string");
+        assert!(result.is_err(), "Expected error for plain string");
+
+        // An array should fail
+        let result = parse_input("[1, 2, 3]");
+        assert!(result.is_err(), "Expected error for array");
+
+        // But an object should succeed
+        let result = parse_input(r#"{"key": "value"}"#);
+        assert!(result.is_ok(), "Expected success for object");
     }
 }

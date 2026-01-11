@@ -407,3 +407,14 @@ fn test_invalid_mutation_op() {
         .failure()
         .stderr(predicate::str::contains("invalid value"));
 }
+
+/// Test invalid variables in raw command returns error
+#[test]
+fn test_invalid_vars_in_raw_command() {
+    let mut cmd = Command::cargo_bin("linears").unwrap();
+    cmd.args(["raw", "--query", "query { viewer { id } }", "--vars", "invalid{json"])
+        .env("LINEARS_API_KEY", "test")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Input must be a JSON/YAML object"));
+}
