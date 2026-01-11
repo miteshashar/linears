@@ -5,14 +5,39 @@ use crate::generated::Resource;
 
 /// Build a list query for a resource
 pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, serde_json::Value) {
+    use crate::validate;
+
     let field_name = resource.field_name();
     let plural_name = plural_field_name(field_name);
 
     // Get fields for this specific resource type
     let node_fields = get_resource_fields(resource);
 
-    let query = format!(
-        r#"query List{resource}($first: Int, $after: String, $last: Int, $before: String) {{
+    // Check if filter is provided
+    let has_filter = options.filter.is_some() || options.filter_file.is_some();
+
+    let query = if has_filter {
+        format!(
+            r#"query List{resource}($first: Int, $after: String, $last: Int, $before: String, $filter: {resource}Filter) {{
+  {field}(first: $first, after: $after, last: $last, before: $before, filter: $filter) {{
+    pageInfo {{
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }}
+    nodes {{
+      {node_fields}
+    }}
+  }}
+}}"#,
+            resource = to_pascal_case(field_name),
+            field = plural_name,
+            node_fields = node_fields,
+        )
+    } else {
+        format!(
+            r#"query List{resource}($first: Int, $after: String, $last: Int, $before: String) {{
   {field}(first: $first, after: $after, last: $last, before: $before) {{
     pageInfo {{
       hasNextPage
@@ -25,16 +50,29 @@ pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, s
     }}
   }}
 }}"#,
-        resource = to_pascal_case(field_name),
-        field = plural_name,
-        node_fields = node_fields,
-    );
+            resource = to_pascal_case(field_name),
+            field = plural_name,
+            node_fields = node_fields,
+        )
+    };
+
+    // Parse filter if provided
+    let filter_value: Option<serde_json::Value> = if let Some(ref filter) = options.filter {
+        validate::parse_input(filter).ok()
+    } else if let Some(ref path) = options.filter_file {
+        validate::read_file(path)
+            .ok()
+            .and_then(|content| validate::parse_input(&content).ok())
+    } else {
+        None
+    };
 
     let variables = serde_json::json!({
         "first": options.first,
         "after": options.after,
         "last": options.last,
         "before": options.before,
+        "filter": filter_value,
     });
 
     (query, variables)
