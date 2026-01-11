@@ -38,10 +38,7 @@ mod exit_codes {
 
 /// Check if the command requires API access
 fn command_requires_api(cmd: &Commands) -> bool {
-    match cmd {
-        Commands::Resources | Commands::Ops | Commands::Schema { .. } => false,
-        _ => true,
-    }
+    !matches!(cmd, Commands::Resources | Commands::Ops | Commands::Schema { .. })
 }
 
 #[tokio::main]
@@ -64,27 +61,27 @@ async fn main() -> ExitCode {
         Commands::Resources => cmd_resources(&cli),
         Commands::Ops => cmd_ops(&cli),
         Commands::List { resource, options } => {
-            cmd_list(&cli, resource.clone(), options.clone()).await
+            cmd_list(&cli, *resource, options.clone()).await
         }
-        Commands::Get { resource, id } => cmd_get(&cli, resource.clone(), id.clone()).await,
+        Commands::Get { resource, id } => cmd_get(&cli, *resource, id.clone()).await,
         Commands::Search { resource, text } => {
-            cmd_search(&cli, resource.clone(), text.clone()).await
+            cmd_search(&cli, *resource, text.clone()).await
         }
         Commands::Raw { query, vars } => cmd_raw(&cli, query.clone(), vars.clone()).await,
         Commands::Create { resource, input } => {
-            cmd_create(&cli, resource.clone(), input.clone()).await
+            cmd_create(&cli, *resource, input.clone()).await
         }
         Commands::Update { resource, id, set } => {
-            cmd_update(&cli, resource.clone(), id.clone(), set.clone()).await
+            cmd_update(&cli, *resource, id.clone(), set.clone()).await
         }
-        Commands::Delete { resource, id } => cmd_delete(&cli, resource.clone(), id.clone()).await,
+        Commands::Delete { resource, id } => cmd_delete(&cli, *resource, id.clone()).await,
         Commands::Archive { resource, id } => {
-            cmd_archive(&cli, resource.clone(), id.clone()).await
+            cmd_archive(&cli, *resource, id.clone()).await
         }
         Commands::Unarchive { resource, id } => {
-            cmd_unarchive(&cli, resource.clone(), id.clone()).await
+            cmd_unarchive(&cli, *resource, id.clone()).await
         }
-        Commands::Mutate { op, vars } => cmd_mutate(&cli, op.clone(), vars.clone()).await,
+        Commands::Mutate { op, vars } => cmd_mutate(&cli, *op, vars.clone()).await,
         Commands::Schema { action } => cmd_schema(&cli, action.clone()).await,
     };
 
@@ -117,7 +114,7 @@ async fn main() -> ExitCode {
             let error_info = render::ErrorInfo {
                 kind,
                 message: &message,
-                hint: hint.as_deref(),
+                hint,
                 details: details.as_ref(),
                 graphql_errors: graphql_errors.as_ref(),
             };

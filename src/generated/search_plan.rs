@@ -119,35 +119,13 @@ pub fn get_search_filter(resource: Resource, text: &str) -> serde_json::Value {
 }
 
 /// Check if a resource supports text search
+#[allow(dead_code)]
 pub fn supports_search(resource: Resource) -> bool {
-    match resource {
-        Resource::AgentActivity => true,
-        Resource::Attachment => true,
-        Resource::Comment => true,
-        Resource::CustomView => true,
-        Resource::Customer => true,
-        Resource::CustomerStatus => true,
-        Resource::CustomerTier => true,
-        Resource::Cycle => true,
-        Resource::Document => true,
-        Resource::Initiative => true,
-        Resource::Issue => true,
-        Resource::IssueLabel => true,
-        Resource::Notification => true,
-        Resource::Project => true,
-        Resource::ProjectLabel => true,
-        Resource::ProjectMilestone => true,
-        Resource::ProjectStatus => true,
-        Resource::ProjectUpdates => true,
-        Resource::Roadmap => true,
-        Resource::Team => true,
-        Resource::User => true,
-        Resource::WorkflowState => true,
-        _ => false,
-    }
+    matches!(resource, Resource::AgentActivity | Resource::Attachment | Resource::Comment | Resource::CustomView | Resource::Customer | Resource::CustomerStatus | Resource::CustomerTier | Resource::Cycle | Resource::Document | Resource::Initiative | Resource::Issue | Resource::IssueLabel | Resource::Notification | Resource::Project | Resource::ProjectLabel | Resource::ProjectMilestone | Resource::ProjectStatus | Resource::ProjectUpdates | Resource::Roadmap | Resource::Team | Resource::User | Resource::WorkflowState)
 }
 
 /// Get the searchable fields for a resource (for debugging/documentation)
+#[allow(dead_code)]
 pub fn get_searchable_fields(resource: Resource) -> &'static [&'static str] {
     match resource {
         Resource::AgentActivity => &["agentSessionId", "type"],

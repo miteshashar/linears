@@ -465,6 +465,7 @@ pub fn format_value_for_table(value: Option<&serde_json::Value>, field_name: &st
 }
 
 /// Format a datetime for display
+#[allow(dead_code)]
 pub fn format_datetime(dt: &DateTime<Utc>, relative: bool) -> String {
     if relative {
         HumanTime::from(*dt).to_string()
@@ -474,6 +475,7 @@ pub fn format_datetime(dt: &DateTime<Utc>, relative: bool) -> String {
 }
 
 /// Format a datetime as relative ("2 hours ago") or absolute based on age
+#[allow(dead_code)]
 pub fn format_datetime_smart(dt: &DateTime<Utc>) -> String {
     let age = Utc::now().signed_duration_since(*dt);
 

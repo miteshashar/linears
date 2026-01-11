@@ -220,7 +220,7 @@ pub async fn cmd_mutate(cli: &Cli, op: MutationOp, vars: VarsOptions) -> Result<
     }
 
     // Build the mutation
-    let (query, _) = build_mutation(op.clone(), variables.clone());
+    let (query, _) = build_mutation(op, variables.clone());
 
     if cli.global.verbose {
         eprintln!("Query: {}", query);

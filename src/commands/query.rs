@@ -50,6 +50,8 @@ pub async fn cmd_list(cli: &Cli, resource: Resource, options: ListOptions) -> Re
 
         let mut all_nodes: Vec<serde_json::Value> = Vec::new();
         let mut cursor: Option<String> = None;
+        // This will always be assigned at least once in the loop before being returned
+        #[allow(unused_assignments)]
         let mut final_page_info: Option<serde_json::Value> = None;
 
         loop {

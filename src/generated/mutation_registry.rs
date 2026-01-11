@@ -4,6 +4,7 @@
 use super::MutationOp;
 
 /// Get the entity field name for a mutation's payload (e.g., "issue" for IssuePayload)
+#[allow(dead_code)]
 pub fn get_mutation_entity_field(op: MutationOp) -> Option<&'static str> {
     match op {
         MutationOp::AgentActivityCreate => Some("agentActivity"),
@@ -284,6 +285,7 @@ pub fn get_mutation_result_fields(resource_name: &str) -> &'static str {
 }
 
 /// Check if a mutation returns an entity (vs just success status)
+#[allow(dead_code)]
 pub fn mutation_returns_entity(op: MutationOp) -> bool {
     get_mutation_entity_field(op).is_some()
 }

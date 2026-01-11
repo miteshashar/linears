@@ -46,6 +46,7 @@ pub fn resolve_input(inline: Option<&str>, file: Option<&str>) -> Result<serde_j
 }
 
 /// Check if a string looks like a UUID
+#[allow(dead_code)]
 pub fn is_uuid(s: &str) -> bool {
     // UUID format: 8-4-4-4-12 hexadecimal characters
     let parts: Vec<&str> = s.split('-').collect();
@@ -61,6 +62,7 @@ pub fn is_uuid(s: &str) -> bool {
 }
 
 /// Check if a string looks like an issue identifier (e.g., ENG-123)
+#[allow(dead_code)]
 pub fn is_identifier(s: &str) -> bool {
     let parts: Vec<&str> = s.split('-').collect();
     if parts.len() != 2 {
@@ -78,6 +80,7 @@ pub fn is_identifier(s: &str) -> bool {
 }
 
 /// Detect if ID is UUID or identifier
+#[allow(dead_code)]
 pub enum IdType {
     Uuid,
     Identifier,
@@ -85,6 +88,7 @@ pub enum IdType {
 }
 
 /// Detect the type of ID
+#[allow(dead_code)]
 pub fn detect_id_type(id: &str) -> IdType {
     if is_uuid(id) {
         IdType::Uuid

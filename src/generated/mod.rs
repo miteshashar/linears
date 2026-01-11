@@ -10,14 +10,11 @@ mod search_plan;
 mod validation_schema;
 
 pub use mutation_ops::MutationOp;
-pub use mutation_registry::{
-    get_mutation_entity_field, get_mutation_result_fields, mutation_returns_entity,
-};
+pub use mutation_registry::get_mutation_result_fields;
 pub use order_by::OrderBy;
 pub use registry::{
-    get_default_fields, get_entity_fields, get_minimal_fields, get_preset_fields,
-    get_relation_fields, get_wide_fields, FieldPreset,
+    get_entity_fields, get_preset_fields, get_relation_fields, FieldPreset,
 };
 pub use resources::Resource;
-pub use search_plan::{get_search_filter, get_searchable_fields, supports_search};
-pub use validation_schema::{get_valid_filter_keys, validate_filter_keys};
+pub use search_plan::get_search_filter;
+pub use validation_schema::validate_filter_keys;
