@@ -68,22 +68,17 @@ fn get_resource_fields(resource: Resource) -> &'static str {
 /// Build a get query for a single entity
 pub fn build_get_query(resource: Resource, id: &str) -> (String, serde_json::Value) {
     let field_name = resource.field_name();
+    let entity_fields = get_entity_fields(resource);
 
     let query = format!(
         r#"query Get{resource}($id: String!) {{
   {field}(id: $id) {{
-    id
-    ... on Issue {{ title description identifier state {{ name }} priority createdAt updatedAt }}
-    ... on Team {{ name key description }}
-    ... on User {{ name email active admin }}
-    ... on Project {{ name description state startDate targetDate }}
-    ... on Cycle {{ name number startsAt endsAt }}
-    ... on IssueLabel {{ name color description }}
-    ... on Comment {{ body createdAt updatedAt }}
+    {entity_fields}
   }}
 }}"#,
         resource = to_pascal_case(field_name),
         field = field_name,
+        entity_fields = entity_fields,
     );
 
     let variables = serde_json::json!({
@@ -91,6 +86,31 @@ pub fn build_get_query(resource: Resource, id: &str) -> (String, serde_json::Val
     });
 
     (query, variables)
+}
+
+/// Get the fields to select for a single entity (more detailed than list)
+fn get_entity_fields(resource: Resource) -> &'static str {
+    match resource {
+        Resource::Issue => "id title description identifier priority createdAt updatedAt state { name } assignee { name } creator { name } team { name key }",
+        Resource::Team => "id name key description createdAt",
+        Resource::User => "id name email active admin createdAt",
+        Resource::Project => "id name description state startDate targetDate createdAt",
+        Resource::Cycle => "id name number startsAt endsAt completedAt",
+        Resource::IssueLabel => "id name color description createdAt",
+        Resource::Comment => "id body createdAt updatedAt user { name }",
+        Resource::Workflow => "id name createdAt",
+        Resource::WorkflowState => "id name color type position",
+        Resource::Attachment => "id title url createdAt",
+        Resource::Document => "id title content createdAt updatedAt",
+        Resource::Roadmap => "id name description createdAt",
+        Resource::Initiative => "id name description createdAt",
+        Resource::Integration => "id service createdAt",
+        Resource::Notification => "id type createdAt readAt",
+        Resource::Webhook => "id url enabled createdAt",
+        Resource::ApiKey => "id label createdAt",
+        Resource::Viewer => "id name email",
+        Resource::Organization => "id name urlKey createdAt",
+    }
 }
 
 /// Build a search query

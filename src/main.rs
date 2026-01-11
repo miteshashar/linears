@@ -251,9 +251,56 @@ async fn cmd_list(
     Ok(())
 }
 
-async fn cmd_get(_cli: &Cli, _resource: generated::Resource, _id: String) -> Result<()> {
-    // TODO: Implement get command
-    anyhow::bail!("Get command not yet implemented")
+async fn cmd_get(cli: &Cli, resource: generated::Resource, id: String) -> Result<()> {
+    use client::{Client, GraphQLRequest};
+    use query_builder::build_get_query;
+
+    // Get API key (already validated in main)
+    let api_key = get_api_key().expect("API key already validated");
+
+    // Create client
+    let client = Client::new(
+        &api_key,
+        cli.global.endpoint.as_deref(),
+        cli.global.timeout,
+    )?;
+
+    // Build the query
+    let (query, variables) = build_get_query(resource, &id);
+
+    if cli.global.verbose {
+        eprintln!("Query: {}", query);
+        eprintln!("Variables: {}", serde_json::to_string_pretty(&variables)?);
+    }
+
+    // Execute the query
+    let request = GraphQLRequest {
+        query,
+        variables: Some(variables),
+        operation_name: None,
+    };
+
+    let response = client.execute(request).await?;
+
+    // Render the response
+    match cli.global.output {
+        cli::OutputFormat::Json => {
+            if cli.global.pretty {
+                println!("{}", serde_json::to_string_pretty(&response.data)?);
+            } else {
+                println!("{}", serde_json::to_string(&response.data)?);
+            }
+        }
+        cli::OutputFormat::Yaml => {
+            println!("{}", serde_yaml::to_string(&response.data)?);
+        }
+        _ => {
+            // For table/text/ndjson, just print JSON for now
+            println!("{}", serde_json::to_string_pretty(&response.data)?);
+        }
+    }
+
+    Ok(())
 }
 
 async fn cmd_search(_cli: &Cli, _resource: generated::Resource, _text: String) -> Result<()> {
