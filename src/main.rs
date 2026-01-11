@@ -820,20 +820,40 @@ async fn cmd_mutate(
 
     let response = client.execute(request).await?;
 
-    // Render the response
+    // Extract mutation result
+    let data = response.data.unwrap_or_default();
+    let op_name = op.operation_name();
+    let result = data.get(op_name).cloned().unwrap_or_default();
+
+    // Render the response with proper envelope
     match cli.global.output {
         cli::OutputFormat::Json => {
+            let output = serde_json::json!({
+                "op": op_name,
+                "operation": "mutate",
+                "result": result,
+            });
             if cli.global.pretty {
-                println!("{}", serde_json::to_string_pretty(&response.data)?);
+                println!("{}", serde_json::to_string_pretty(&output)?);
             } else {
-                println!("{}", serde_json::to_string(&response.data)?);
+                println!("{}", serde_json::to_string(&output)?);
             }
         }
         cli::OutputFormat::Yaml => {
-            println!("{}", serde_yaml::to_string(&response.data)?);
+            let output = serde_json::json!({
+                "op": op_name,
+                "operation": "mutate",
+                "result": result,
+            });
+            println!("{}", serde_yaml::to_string(&output)?);
         }
         _ => {
-            println!("{}", serde_json::to_string_pretty(&response.data)?);
+            let output = serde_json::json!({
+                "op": op_name,
+                "operation": "mutate",
+                "result": result,
+            });
+            println!("{}", serde_json::to_string_pretty(&output)?);
         }
     }
 
