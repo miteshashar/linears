@@ -119,57 +119,76 @@ pub fn build_search_query(
     text: &str,
 ) -> (String, serde_json::Value, SearchStrategy) {
     let field_name = resource.field_name();
+    let plural_name = plural_field_name(field_name);
+    let node_fields = get_resource_fields(resource);
 
-    // Determine search strategy based on resource
-    let strategy = match resource {
-        // Resources with native search
-        _ => SearchStrategy::FilterHeuristic,
-    };
-
+    // Use filter-based search for all resources
+    // Note: issueSearch was deprecated, so we use filter approach universally
+    let filter = get_search_filter(resource, text);
     let query = format!(
-        r#"query Search{resource}($filter: {resource}Filter) {{
-  {field}(filter: $filter) {{
+        r#"query Search{resource}($filter: {resource}Filter, $first: Int) {{
+  {field}(filter: $filter, first: $first) {{
     nodes {{
-      id
-      ... on Issue {{ title identifier state {{ name }} }}
-      ... on Team {{ name key }}
-      ... on User {{ name email }}
-      ... on Project {{ name state }}
+      {node_fields}
     }}
   }}
 }}"#,
         resource = to_pascal_case(field_name),
-        field = plural_field_name(field_name),
+        field = plural_name,
+        node_fields = node_fields,
     );
-
-    // Build OR filter for common text fields
-    let filter = serde_json::json!({
-        "or": [
-            { "name": { "containsIgnoreCase": text } },
-            { "title": { "containsIgnoreCase": text } },
-        ]
-    });
-
     let variables = serde_json::json!({
         "filter": filter,
+        "first": 20,
     });
 
-    (query, variables, strategy)
+    (query, variables, SearchStrategy::FilterHeuristic)
+}
+
+/// Get the filter for searching a resource
+fn get_search_filter(resource: Resource, text: &str) -> serde_json::Value {
+    match resource {
+        Resource::Issue => serde_json::json!({
+            "or": [
+                { "title": { "containsIgnoreCase": text } },
+                { "description": { "containsIgnoreCase": text } },
+            ]
+        }),
+        Resource::Team => serde_json::json!({
+            "or": [
+                { "name": { "containsIgnoreCase": text } },
+                { "key": { "containsIgnoreCase": text } },
+            ]
+        }),
+        Resource::User => serde_json::json!({
+            "or": [
+                { "name": { "containsIgnoreCase": text } },
+                { "email": { "containsIgnoreCase": text } },
+            ]
+        }),
+        Resource::Project => serde_json::json!({
+            "name": { "containsIgnoreCase": text }
+        }),
+        Resource::IssueLabel => serde_json::json!({
+            "name": { "containsIgnoreCase": text }
+        }),
+        _ => serde_json::json!({
+            "name": { "containsIgnoreCase": text }
+        }),
+    }
 }
 
 /// Search strategy used
 #[derive(Debug, Clone, Copy)]
 pub enum SearchStrategy {
-    /// Used native search query field
-    Native,
     /// Used filter OR-heuristic
     FilterHeuristic,
 }
 
 impl SearchStrategy {
+    #[allow(dead_code)]
     pub fn as_str(&self) -> &'static str {
         match self {
-            SearchStrategy::Native => "native",
             SearchStrategy::FilterHeuristic => "filter_heuristic",
         }
     }
