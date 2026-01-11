@@ -15,6 +15,7 @@ mod cli;
 mod client;
 mod generated;
 mod mutation_builder;
+mod progress;
 mod query_builder;
 mod render;
 mod validate;
@@ -239,6 +240,7 @@ async fn cmd_list(
     options: cli::ListOptions,
 ) -> Result<()> {
     use client::{Client, GraphQLRequest};
+    use progress::with_spinner;
     use query_builder::build_list_query;
 
     // Get API key (already validated in main)
@@ -259,14 +261,18 @@ async fn cmd_list(
         eprintln!("Variables: {}", serde_json::to_string_pretty(&variables)?);
     }
 
-    // Execute the query
+    // Execute the query with spinner
     let request = GraphQLRequest {
         query,
         variables: Some(variables),
         operation_name: None,
     };
 
-    let response = client.execute(request).await?;
+    let response = with_spinner(
+        &format!("Fetching {}...", resource.field_name()),
+        client.execute(request),
+    )
+    .await?;
 
     // Extract nodes and pageInfo from response
     let data = response.data.unwrap_or_default();
@@ -364,6 +370,7 @@ async fn cmd_list(
 
 async fn cmd_get(cli: &Cli, resource: generated::Resource, id: String) -> Result<()> {
     use client::{Client, GraphQLRequest};
+    use progress::with_spinner;
     use query_builder::build_get_query;
 
     // Get API key (already validated in main)
@@ -384,14 +391,18 @@ async fn cmd_get(cli: &Cli, resource: generated::Resource, id: String) -> Result
         eprintln!("Variables: {}", serde_json::to_string_pretty(&variables)?);
     }
 
-    // Execute the query
+    // Execute the query with spinner
     let request = GraphQLRequest {
         query,
         variables: Some(variables),
         operation_name: None,
     };
 
-    let response = client.execute(request).await?;
+    let response = with_spinner(
+        &format!("Fetching {}...", resource.field_name()),
+        client.execute(request),
+    )
+    .await?;
 
     // Extract entity from response
     let data = response.data.unwrap_or_default();
@@ -434,6 +445,7 @@ async fn cmd_get(cli: &Cli, resource: generated::Resource, id: String) -> Result
 
 async fn cmd_search(cli: &Cli, resource: generated::Resource, text: String) -> Result<()> {
     use client::{Client, GraphQLRequest};
+    use progress::with_spinner;
     use query_builder::build_search_query;
 
     // Get API key (already validated in main)
@@ -455,14 +467,18 @@ async fn cmd_search(cli: &Cli, resource: generated::Resource, text: String) -> R
         eprintln!("Variables: {}", serde_json::to_string_pretty(&variables)?);
     }
 
-    // Execute the query
+    // Execute the query with spinner
     let request = GraphQLRequest {
         query,
         variables: Some(variables),
         operation_name: None,
     };
 
-    let response = client.execute(request).await?;
+    let response = with_spinner(
+        &format!("Searching {}...", resource.field_name()),
+        client.execute(request),
+    )
+    .await?;
 
     // Extract nodes from response
     let data = response.data.unwrap_or_default();
@@ -519,6 +535,7 @@ async fn cmd_search(cli: &Cli, resource: generated::Resource, text: String) -> R
 
 async fn cmd_raw(cli: &Cli, query: String) -> Result<()> {
     use client::{Client, GraphQLRequest};
+    use progress::with_spinner;
 
     // Get API key (already validated in main)
     let api_key = get_api_key().expect("API key already validated");
@@ -541,14 +558,14 @@ async fn cmd_raw(cli: &Cli, query: String) -> Result<()> {
         eprintln!("Query: {}", query_text);
     }
 
-    // Execute the query
+    // Execute the query with spinner
     let request = GraphQLRequest {
         query: query_text,
         variables: None,
         operation_name: None,
     };
 
-    let response = client.execute(request).await?;
+    let response = with_spinner("Executing query...", client.execute(request)).await?;
 
     // Render the response
     match cli.global.output {
@@ -577,6 +594,7 @@ async fn cmd_create(
 ) -> Result<()> {
     use client::{Client, GraphQLRequest};
     use mutation_builder::build_create_mutation;
+    use progress::with_spinner;
     use validate::resolve_input;
 
     // Get API key (already validated in main)
@@ -600,14 +618,18 @@ async fn cmd_create(
         eprintln!("Variables: {}", serde_json::to_string_pretty(&variables)?);
     }
 
-    // Execute the mutation
+    // Execute the mutation with spinner
     let request = GraphQLRequest {
         query,
         variables: Some(variables),
         operation_name: None,
     };
 
-    let response = client.execute(request).await?;
+    let response = with_spinner(
+        &format!("Creating {}...", resource.field_name()),
+        client.execute(request),
+    )
+    .await?;
 
     // Render the response
     match cli.global.output {
@@ -637,6 +659,7 @@ async fn cmd_update(
 ) -> Result<()> {
     use client::{Client, GraphQLRequest};
     use mutation_builder::build_update_mutation;
+    use progress::with_spinner;
     use validate::resolve_input;
 
     // Get API key (already validated in main)
@@ -660,14 +683,18 @@ async fn cmd_update(
         eprintln!("Variables: {}", serde_json::to_string_pretty(&variables)?);
     }
 
-    // Execute the mutation
+    // Execute the mutation with spinner
     let request = GraphQLRequest {
         query,
         variables: Some(variables),
         operation_name: None,
     };
 
-    let response = client.execute(request).await?;
+    let response = with_spinner(
+        &format!("Updating {}...", resource.field_name()),
+        client.execute(request),
+    )
+    .await?;
 
     // Render the response
     match cli.global.output {
@@ -692,6 +719,7 @@ async fn cmd_update(
 async fn cmd_delete(cli: &Cli, resource: generated::Resource, id: String) -> Result<()> {
     use client::{Client, GraphQLRequest};
     use mutation_builder::build_delete_mutation;
+    use progress::with_spinner;
 
     // Get API key (already validated in main)
     let api_key = get_api_key().expect("API key already validated");
@@ -711,14 +739,18 @@ async fn cmd_delete(cli: &Cli, resource: generated::Resource, id: String) -> Res
         eprintln!("Variables: {}", serde_json::to_string_pretty(&variables)?);
     }
 
-    // Execute the mutation
+    // Execute the mutation with spinner
     let request = GraphQLRequest {
         query,
         variables: Some(variables),
         operation_name: None,
     };
 
-    let response = client.execute(request).await?;
+    let response = with_spinner(
+        &format!("Deleting {}...", resource.field_name()),
+        client.execute(request),
+    )
+    .await?;
 
     // Render the response
     match cli.global.output {
@@ -743,6 +775,7 @@ async fn cmd_delete(cli: &Cli, resource: generated::Resource, id: String) -> Res
 async fn cmd_archive(cli: &Cli, resource: generated::Resource, id: String) -> Result<()> {
     use client::{Client, GraphQLRequest};
     use mutation_builder::build_archive_mutation;
+    use progress::with_spinner;
 
     // Get API key (already validated in main)
     let api_key = get_api_key().expect("API key already validated");
@@ -762,14 +795,18 @@ async fn cmd_archive(cli: &Cli, resource: generated::Resource, id: String) -> Re
         eprintln!("Variables: {}", serde_json::to_string_pretty(&variables)?);
     }
 
-    // Execute the mutation
+    // Execute the mutation with spinner
     let request = GraphQLRequest {
         query,
         variables: Some(variables),
         operation_name: None,
     };
 
-    let response = client.execute(request).await?;
+    let response = with_spinner(
+        &format!("Archiving {}...", resource.field_name()),
+        client.execute(request),
+    )
+    .await?;
 
     // Render the response
     match cli.global.output {
@@ -794,6 +831,7 @@ async fn cmd_archive(cli: &Cli, resource: generated::Resource, id: String) -> Re
 async fn cmd_unarchive(cli: &Cli, resource: generated::Resource, id: String) -> Result<()> {
     use client::{Client, GraphQLRequest};
     use mutation_builder::build_unarchive_mutation;
+    use progress::with_spinner;
 
     // Get API key (already validated in main)
     let api_key = get_api_key().expect("API key already validated");
@@ -813,14 +851,18 @@ async fn cmd_unarchive(cli: &Cli, resource: generated::Resource, id: String) -> 
         eprintln!("Variables: {}", serde_json::to_string_pretty(&variables)?);
     }
 
-    // Execute the mutation
+    // Execute the mutation with spinner
     let request = GraphQLRequest {
         query,
         variables: Some(variables),
         operation_name: None,
     };
 
-    let response = client.execute(request).await?;
+    let response = with_spinner(
+        &format!("Unarchiving {}...", resource.field_name()),
+        client.execute(request),
+    )
+    .await?;
 
     // Render the response
     match cli.global.output {
@@ -849,6 +891,7 @@ async fn cmd_mutate(
 ) -> Result<()> {
     use client::{Client, GraphQLRequest};
     use mutation_builder::build_mutation;
+    use progress::with_spinner;
     use validate::resolve_input;
 
     // Get API key (already validated in main)
@@ -880,21 +923,25 @@ async fn cmd_mutate(
     }
 
     // Build the mutation
-    let (query, _) = build_mutation(op, variables.clone());
+    let (query, _) = build_mutation(op.clone(), variables.clone());
 
     if cli.global.verbose {
         eprintln!("Query: {}", query);
         eprintln!("Variables: {}", serde_json::to_string_pretty(&variables)?);
     }
 
-    // Execute the mutation
+    // Execute the mutation with spinner
     let request = GraphQLRequest {
         query,
         variables: Some(variables),
         operation_name: None,
     };
 
-    let response = client.execute(request).await?;
+    let response = with_spinner(
+        &format!("Executing {}...", op.operation_name()),
+        client.execute(request),
+    )
+    .await?;
 
     // Extract mutation result
     let data = response.data.unwrap_or_default();
