@@ -11,13 +11,21 @@ pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, s
     let plural_name = plural_field_name(field_name);
 
     // Get fields - use --select if provided, otherwise use preset
-    let node_fields: std::borrow::Cow<str> = if let Some(ref select) = options.select {
+    let mut node_fields: String = if let Some(ref select) = options.select {
         // User specified exact fields with --select
-        std::borrow::Cow::Owned(select.replace(',', " "))
+        select.replace(',', " ")
     } else {
         // Use preset-based fields
-        std::borrow::Cow::Borrowed(get_resource_fields_for_preset(resource, options.preset))
+        get_resource_fields_for_preset(resource, options.preset).to_string()
     };
+
+    // Handle --expand option for relation expansion
+    if let Some(ref expands) = options.expand {
+        for expand in expands {
+            let expand_fields = parse_expand_spec(expand);
+            node_fields.push_str(&expand_fields);
+        }
+    }
 
     // Check if filter is provided
     let has_filter = options.filter.is_some() || options.filter_file.is_some();
@@ -313,5 +321,38 @@ fn plural_field_name(field: &str) -> String {
         format!("{}ies", &field[..field.len() - 1])
     } else {
         format!("{}s", field)
+    }
+}
+
+/// Parse an --expand spec like "team" or "team:name,key"
+/// Returns a GraphQL field selection string
+fn parse_expand_spec(spec: &str) -> String {
+    if let Some((relation, fields)) = spec.split_once(':') {
+        // Explicit fields: --expand team:name,key
+        let field_list = fields.replace(',', " ");
+        format!(" {} {{ {} }}", relation, field_list)
+    } else {
+        // Default fields for the relation: --expand team
+        let default_fields = get_default_relation_fields(spec);
+        format!(" {} {{ {} }}", spec, default_fields)
+    }
+}
+
+/// Get default fields for a relation expansion
+fn get_default_relation_fields(relation: &str) -> &'static str {
+    match relation {
+        "team" => "id name key",
+        "assignee" | "creator" | "user" => "id name email",
+        "state" => "id name color type",
+        "project" => "id name",
+        "cycle" => "id name number",
+        "parent" => "id identifier title",
+        "labels" => "nodes { id name color }",
+        "comments" => "nodes { id body }",
+        "attachments" => "nodes { id title url }",
+        "subscribers" => "nodes { id name }",
+        "children" => "nodes { id identifier title }",
+        "organization" => "id name urlKey",
+        _ => "id",
     }
 }
