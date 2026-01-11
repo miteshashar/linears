@@ -309,16 +309,53 @@ async fn cmd_list(
                 }
             }
         }
-        _ => {
-            // For table/text, just print JSON for now
-            // TODO: Implement proper table rendering
-            let output = serde_json::json!({
-                "resource": resource_name,
-                "operation": "list",
-                "pageInfo": page_info,
-                "nodes": nodes,
-            });
-            println!("{}", serde_json::to_string_pretty(&output)?);
+        cli::OutputFormat::Table | cli::OutputFormat::Text => {
+            // Render as table
+            if let Some(arr) = nodes.as_array() {
+                if arr.is_empty() {
+                    println!("No results found");
+                } else {
+                    // Extract keys from first item for headers
+                    if let Some(first) = arr.first() {
+                        if let Some(obj) = first.as_object() {
+                            let headers: Vec<&str> = obj.keys().map(|s| s.as_str()).collect();
+
+                            // Print header row
+                            let header_line: Vec<String> = headers.iter().map(|h| h.to_uppercase()).collect();
+                            println!("{}", header_line.join("\t"));
+
+                            // Print separator
+                            println!("{}", headers.iter().map(|h| "-".repeat(h.len().max(10))).collect::<Vec<_>>().join("\t"));
+
+                            // Print data rows
+                            for item in arr {
+                                if let Some(item_obj) = item.as_object() {
+                                    let row: Vec<String> = headers.iter().map(|h| {
+                                        match item_obj.get(*h) {
+                                            Some(serde_json::Value::String(s)) => s.clone(),
+                                            Some(serde_json::Value::Number(n)) => n.to_string(),
+                                            Some(serde_json::Value::Bool(b)) => b.to_string(),
+                                            Some(serde_json::Value::Null) => "-".to_string(),
+                                            Some(serde_json::Value::Object(o)) => {
+                                                // For nested objects, try to get a display field
+                                                o.get("name")
+                                                    .or_else(|| o.get("key"))
+                                                    .or_else(|| o.get("id"))
+                                                    .and_then(|v| v.as_str())
+                                                    .map(String::from)
+                                                    .unwrap_or_else(|| "[object]".to_string())
+                                            }
+                                            Some(serde_json::Value::Array(_)) => "[array]".to_string(),
+                                            None => "-".to_string(),
+                                        }
+                                    }).collect();
+                                    println!("{}", row.join("\t"));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
