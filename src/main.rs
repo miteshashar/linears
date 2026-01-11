@@ -770,9 +770,19 @@ fn cmd_schema(_cli: &Cli, action: cli::SchemaAction) -> Result<()> {
                     meta["source"].as_str().unwrap_or("unknown")
                 );
                 println!(
+                    "  Commit: {}",
+                    meta["commit"].as_str().unwrap_or("unknown")
+                );
+                println!(
                     "  Synced At: {}",
                     meta["syncedAt"].as_str().unwrap_or("unknown")
                 );
+                // Build GitHub permalink if commit is available
+                if let (Some(source), Some(commit)) = (meta["source"].as_str(), meta["commit"].as_str()) {
+                    if source.contains("github.com") {
+                        println!("  Permalink: {}/tree/{}", source, commit);
+                    }
+                }
             } else {
                 println!("No schema metadata found.");
                 println!("Run 'cargo xtask schema sync' to sync the schema.");
