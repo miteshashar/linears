@@ -259,6 +259,8 @@ fn generate_resources(
     use graphql_parser::schema::TypeDefinition;
 
     let mut resources = Vec::new();
+    // Map of field_name -> return_type_name for building plural mappings
+    let mut field_to_type: HashMap<String, String> = HashMap::new();
 
     for def in &ast.definitions {
         if let Definition::TypeDefinition(TypeDefinition::Object(obj)) = def {
@@ -270,6 +272,9 @@ fn generate_resources(
                         && !field.name.starts_with("__")
                     {
                         resources.push(field.name.clone());
+                        // Extract return type
+                        let (type_name, _) = extract_type_info(&field.field_type);
+                        field_to_type.insert(field.name.clone(), type_name);
                     }
                 }
             }
@@ -277,6 +282,37 @@ fn generate_resources(
     }
 
     resources.sort();
+
+    // Build singular -> plural mapping
+    // A field is plural of another if:
+    // 1. Plural field returns TypeConnection
+    // 2. Singular field returns Type (same base name)
+    // 3. The plural field name is a natural plural of the singular (singular + "s" or similar)
+    // Example: issue -> Issue, issues -> IssueConnection
+    let mut singular_to_plural: HashMap<String, String> = HashMap::new();
+
+    for (field_name, return_type) in &field_to_type {
+        // Check if this is a Connection type (plural)
+        if return_type.ends_with("Connection") {
+            // Extract base type: IssueConnection -> Issue
+            let base_type = return_type.strip_suffix("Connection").unwrap_or(return_type);
+
+            // Find singular field that returns this base type AND has matching name pattern
+            for (other_field, other_type) in &field_to_type {
+                if other_type == base_type && other_field != field_name {
+                    // Verify this is a natural plural: plural should be singular+"s" or singular+"es" or "y"->"ies"
+                    let is_natural_plural = field_name == &format!("{}s", other_field)
+                        || field_name == &format!("{}es", other_field)
+                        || (other_field.ends_with('y')
+                            && field_name == &format!("{}ies", &other_field[..other_field.len() - 1]));
+
+                    if is_natural_plural {
+                        singular_to_plural.insert(other_field.clone(), field_name.clone());
+                    }
+                }
+            }
+        }
+    }
 
     let mut code = String::from(
         r#"//! Generated resource types - DO NOT EDIT
@@ -337,12 +373,39 @@ impl Resource {
     code.push_str(
         r#"        }
     }
+
+    /// Get the plural GraphQL field name for this resource.
+    /// Used for list queries. Returns the schema-defined plural or the field name itself
+    /// if this resource already represents a collection.
+    pub fn plural_name(&self) -> &'static str {
+        match self {
+"#,
+    );
+
+    // Generate plural_name match arms
+    for resource in &resources {
+        let variant = to_pascal_case(resource);
+        // Use the schema-derived plural if available, otherwise use field name itself
+        let plural = singular_to_plural.get(resource).unwrap_or(resource);
+        code.push_str(&format!(
+            "            Resource::{} => \"{}\",\n",
+            variant, plural
+        ));
+    }
+
+    code.push_str(
+        r#"        }
+    }
 }
 "#,
     );
 
     fs::write(output_dir.join("resources.rs"), code)?;
-    println!("  Generated resources.rs ({} resources)", resources.len());
+    println!(
+        "  Generated resources.rs ({} resources, {} with plural mappings)",
+        resources.len(),
+        singular_to_plural.len()
+    );
 
     Ok(())
 }

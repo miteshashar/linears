@@ -352,7 +352,8 @@ async fn cmd_list(
     )?;
 
     let resource_name = resource.field_name();
-    let plural_name = query_builder::plural_field_name(resource_name);
+    // Use schema-derived plural name (avoids naive pluralization bugs)
+    let plural_name = resource.plural_name();
 
     // If --all is specified, auto-paginate
     let (nodes, page_info) = if options.all {
@@ -641,8 +642,9 @@ async fn cmd_search(cli: &Cli, resource: generated::Resource, text: String) -> R
     // Extract nodes from response
     let data = response.data.unwrap_or_default();
     let resource_name = resource.field_name();
-    let plural_name = query_builder::plural_field_name(resource_name);
-    let resource_data = &data[&plural_name];
+    // Use schema-derived plural name (avoids naive pluralization bugs)
+    let plural_name = resource.plural_name();
+    let resource_data = &data[plural_name];
     let nodes = resource_data.get("nodes").cloned().unwrap_or_default();
 
     // Render the response with proper envelope

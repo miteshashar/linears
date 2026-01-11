@@ -11,7 +11,8 @@ pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, s
     use crate::validate;
 
     let field_name = resource.field_name();
-    let plural_name = plural_field_name(field_name);
+    // Use schema-derived plural name (avoids naive pluralization bugs)
+    let plural_name = resource.plural_name();
 
     // Get fields - use --select if provided, otherwise use preset
     let mut node_fields: String = if let Some(ref select) = options.select {
@@ -205,7 +206,8 @@ pub fn build_search_query(
     text: &str,
 ) -> (String, serde_json::Value, SearchStrategy) {
     let field_name = resource.field_name();
-    let plural_name = plural_field_name(field_name);
+    // Use schema-derived plural name (avoids naive pluralization bugs)
+    let plural_name = resource.plural_name();
     let node_fields = get_resource_fields(resource);
 
     // Use filter-based search for all resources
@@ -265,18 +267,6 @@ fn to_pascal_case(s: &str) -> String {
     }
 
     result
-}
-
-/// Convert a singular field name to its plural form for GraphQL queries
-pub fn plural_field_name(field: &str) -> String {
-    // Simple pluralization - real impl would be more sophisticated
-    if field.ends_with('s') {
-        format!("{}es", field)
-    } else if field.ends_with('y') {
-        format!("{}ies", &field[..field.len() - 1])
-    } else {
-        format!("{}s", field)
-    }
 }
 
 /// Parse an --expand spec like "team" or "team:name,key"
