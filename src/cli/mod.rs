@@ -278,6 +278,4 @@ pub enum SchemaAction {
     Info,
     /// Show diff between local and upstream schema
     Diff,
-    /// Sync schema from Linear (maintainers)
-    Sync,
 }

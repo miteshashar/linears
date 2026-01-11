@@ -1133,10 +1133,6 @@ fn cmd_schema(_cli: &Cli, action: cli::SchemaAction) -> Result<()> {
             println!("Schema diff not yet implemented");
             println!("Run 'cargo xtask schema sync' to check for updates");
         }
-        cli::SchemaAction::Sync => {
-            println!("Schema sync requires maintainer access.");
-            println!("Run: cargo xtask schema sync");
-        }
     }
 
     Ok(())
