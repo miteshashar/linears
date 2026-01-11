@@ -11,11 +11,11 @@ FAIL=0
 # Test 1: Auth error has specific message
 echo -n "Test 1: Auth error has specific message... "
 # Save and replace API key
-original_key="$LINEAR_API_KEY"
-export LINEAR_API_KEY="invalid-key"
+original_key="$LINEARS_API_KEY"
+export LINEARS_API_KEY="invalid-key"
 auth_output=$(./target/debug/linears --out json list issue --first 1 2>&1)
 auth_exit=$?
-export LINEAR_API_KEY="$original_key"
+export LINEARS_API_KEY="$original_key"
 if [ "$auth_exit" -ne 0 ] && echo "$auth_output" | grep -qi "auth\|unauthorized\|invalid\|api.key\|error"; then
     echo "PASS"
     ((PASS++))

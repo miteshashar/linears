@@ -22,11 +22,11 @@ fi
 
 # Test 2: Auth error returns 2
 echo -n "Test 2: Auth error returns exit code 2... "
-original_key="$LINEAR_API_KEY"
-export LINEAR_API_KEY="invalid-api-key"
+original_key="$LINEARS_API_KEY"
+export LINEARS_API_KEY="invalid-api-key"
 ./target/debug/linears --out json list issue --first 1 > /dev/null 2>&1
 exit_code=$?
-export LINEAR_API_KEY="$original_key"
+export LINEARS_API_KEY="$original_key"
 if [ "$exit_code" -eq 2 ]; then
     echo "PASS"
     ((PASS++))

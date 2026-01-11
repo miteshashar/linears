@@ -23,7 +23,7 @@ Must-have
 - Per-mutation variable schemas (best-effort metadata for validation/help)
 - Fixed verbs (no runtime-generated subcommands). Resources/ops are compile-time enums generated from schema.
 - Auth: personal API key only via environment variable:
-- LINEAR_API_KEY is required for any network call
+- LINEARS_API_KEY is required for any network call
 - No CLI option for API key
 - No OAuth support
 - Input formats for filters/variables/inputs: JSON + YAML
@@ -205,19 +205,19 @@ Mutations must request a minimal useful selection set:
 8) Auth & configuration
 
 Auth (strict)
-- Required: LINEAR_API_KEY
+- Required: LINEARS_API_KEY
 - No CLI option to provide the token
 - No OAuth flows
 
 Configuration env vars
-- LINEAR_API_KEY (required for any network call)
-- LINEAR_ENDPOINT (optional; overrides default endpoint)
+- LINEARS_API_KEY (required for any network call)
+- LINEARS_ENDPOINT (optional; overrides default endpoint)
 - LINEARS_OUTPUT (optional; sets default output format: json|yaml|table|text|ndjson)
 - LINEARS_WORKSPACE (required when API key has multi-workspace access; workspace slug or ID)
 
 Endpoint
 - Default: https://api.linear.app/graphql
-- Allow override by --endpoint or env var LINEAR_ENDPOINT
+- Allow override by --endpoint or env var LINEARS_ENDPOINT
 
 ⸻
 
@@ -249,7 +249,7 @@ Design constraints:
 Exit codes:
 - 0: success
 - 1: general/unknown error
-- 2: auth error (missing/invalid LINEAR_API_KEY)
+- 2: auth error (missing/invalid LINEARS_API_KEY)
 - 3: network error (connection failed, timeout)
 - 4: GraphQL error (valid request, Linear returned errors)
 
@@ -276,13 +276,13 @@ Unit + snapshot tests
 
 Integration tests (offline)
 - Mock GraphQL server validates:
-- Authorization header uses LINEAR_API_KEY value
+- Authorization header uses LINEARS_API_KEY value
 - request body matches expected document + variables
 - retry/backoff behavior on 429/5xx
 - output formatting stable for all formats
 
 Optional live smoke tests (off by default)
-- Enabled by env var; requires LINEAR_API_KEY.
+- Enabled by env var; requires LINEARS_API_KEY.
 
 ⸻
 

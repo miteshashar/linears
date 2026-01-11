@@ -25,7 +25,7 @@ use cli::{Cli, Commands};
 /// Exit codes for the CLI
 /// - 0: Success
 /// - 1: General/unknown error
-/// - 2: Auth error (missing/invalid LINEAR_API_KEY)
+/// - 2: Auth error (missing/invalid LINEARS_API_KEY)
 /// - 3: Network error (connection failed, timeout)
 /// - 4: GraphQL error (valid request, Linear returned errors)
 mod exit_codes {
@@ -50,24 +50,24 @@ fn command_requires_api(cmd: &Commands) -> bool {
 
 /// Get the API key from environment, returning error message if missing or empty
 fn get_api_key() -> Result<String, String> {
-    match std::env::var("LINEAR_API_KEY") {
+    match std::env::var("LINEARS_API_KEY") {
         Ok(key) if key.trim().is_empty() => Err(
-            "LINEAR_API_KEY environment variable is empty.\n\
+            "LINEARS_API_KEY environment variable is empty.\n\
              \n\
              To use this command, set your Linear API key:\n\
              \n\
-               export LINEAR_API_KEY='lin_api_...'\n\
+               export LINEARS_API_KEY='lin_api_...'\n\
              \n\
              Get your API key from: https://linear.app/settings/api"
                 .to_string(),
         ),
         Ok(key) => Ok(key),
         Err(_) => Err(
-            "Missing LINEAR_API_KEY environment variable.\n\
+            "Missing LINEARS_API_KEY environment variable.\n\
              \n\
              To use this command, set your Linear API key:\n\
              \n\
-               export LINEAR_API_KEY='lin_api_...'\n\
+               export LINEARS_API_KEY='lin_api_...'\n\
              \n\
              Get your API key from: https://linear.app/settings/api"
                 .to_string(),

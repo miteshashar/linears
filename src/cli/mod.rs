@@ -38,7 +38,7 @@ pub struct GlobalOptions {
     pub verbose: bool,
 
     /// Override API endpoint
-    #[arg(long, env = "LINEAR_ENDPOINT")]
+    #[arg(long, env = "LINEARS_ENDPOINT")]
     pub endpoint: Option<String>,
 
     /// Request timeout in seconds

@@ -1,16 +1,16 @@
 #!/bin/bash
-# Test LINEAR_ENDPOINT env var override
+# Test LINEARS_ENDPOINT env var override
 
 # Build first
 ./init.sh build > /dev/null 2>&1
 
-echo "Testing LINEAR_ENDPOINT env var..."
+echo "Testing LINEARS_ENDPOINT env var..."
 PASS=0
 FAIL=0
 
-# Test 1: LINEAR_ENDPOINT is respected (connection to invalid endpoint fails with network error)
-echo -n "Test 1: LINEAR_ENDPOINT env var is respected... "
-output=$(LINEAR_ENDPOINT=http://localhost:1 ./target/debug/linears list issue 2>&1)
+# Test 1: LINEARS_ENDPOINT is respected (connection to invalid endpoint fails with network error)
+echo -n "Test 1: LINEARS_ENDPOINT env var is respected... "
+output=$(LINEARS_ENDPOINT=http://localhost:1 ./target/debug/linears list issue 2>&1)
 exit_code=$?
 # Should be exit code 3 (network error) indicating it tried to use the custom endpoint
 if [ "$exit_code" -eq 3 ]; then
@@ -26,7 +26,7 @@ fi
 echo -n "Test 2: --endpoint flag overrides env var... "
 # Set env to invalid, but use flag to override with another invalid endpoint
 # Both should give network error (code 3), but this confirms the flag is processed
-output2=$(LINEAR_ENDPOINT=http://invalid1:1 ./target/debug/linears --endpoint http://localhost:2 list issue 2>&1)
+output2=$(LINEARS_ENDPOINT=http://invalid1:1 ./target/debug/linears --endpoint http://localhost:2 list issue 2>&1)
 exit_code2=$?
 if [ "$exit_code2" -eq 3 ]; then
     echo "PASS"
@@ -37,15 +37,15 @@ else
     ((FAIL++))
 fi
 
-# Test 3: Help mentions LINEAR_ENDPOINT
-echo -n "Test 3: Help mentions LINEAR_ENDPOINT env var... "
+# Test 3: Help mentions LINEARS_ENDPOINT
+echo -n "Test 3: Help mentions LINEARS_ENDPOINT env var... "
 help_output=$(./target/debug/linears --help 2>&1)
-if echo "$help_output" | grep -q "LINEAR_ENDPOINT"; then
+if echo "$help_output" | grep -q "LINEARS_ENDPOINT"; then
     echo "PASS"
     ((PASS++))
 else
     echo "FAIL"
-    echo "Help output doesn't mention LINEAR_ENDPOINT"
+    echo "Help output doesn't mention LINEARS_ENDPOINT"
     ((FAIL++))
 fi
 

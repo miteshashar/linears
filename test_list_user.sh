@@ -10,7 +10,7 @@ FAIL=0
 
 # Test 1: List user requires API key
 echo -n "Test 1: List user without API key returns exit code 2... "
-LINEAR_API_KEY= ./target/debug/linears list user > /dev/null 2>&1
+LINEARS_API_KEY= ./target/debug/linears list user > /dev/null 2>&1
 exit_code=$?
 if [ "$exit_code" -eq 2 ]; then
     echo "PASS"

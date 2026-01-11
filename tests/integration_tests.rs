@@ -21,7 +21,7 @@ fn test_api_key_in_authorization_header() {
             "--endpoint", "http://localhost:9999/graphql",
             "list", "issue"
         ])
-        .env("LINEAR_API_KEY", "test-api-key-12345")
+        .env("LINEARS_API_KEY", "test-api-key-12345")
         .output()
         .expect("Failed to execute command");
 
@@ -41,8 +41,8 @@ fn test_api_key_in_authorization_header() {
 fn test_missing_api_key_exit_code() {
     let output = Command::new("cargo")
         .args(["run", "--", "list", "issue"])
-        .env_remove("LINEAR_API_KEY")
-        .env("LINEAR_API_KEY", "")
+        .env_remove("LINEARS_API_KEY")
+        .env("LINEARS_API_KEY", "")
         .output()
         .expect("Failed to execute command");
 
@@ -50,8 +50,8 @@ fn test_missing_api_key_exit_code() {
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("LINEAR_API_KEY"),
-        "Error message should mention LINEAR_API_KEY: {}", stderr
+        stderr.contains("LINEARS_API_KEY"),
+        "Error message should mention LINEARS_API_KEY: {}", stderr
     );
 }
 
@@ -60,8 +60,8 @@ fn test_missing_api_key_exit_code() {
 fn test_resources_command_works_without_api_key() {
     let output = Command::new("cargo")
         .args(["run", "--", "resources"])
-        .env_remove("LINEAR_API_KEY")
-        .env("LINEAR_API_KEY", "")
+        .env_remove("LINEARS_API_KEY")
+        .env("LINEARS_API_KEY", "")
         .output()
         .expect("Failed to execute command");
 
@@ -79,8 +79,8 @@ fn test_resources_command_works_without_api_key() {
 fn test_ops_command_works_without_api_key() {
     let output = Command::new("cargo")
         .args(["run", "--", "ops"])
-        .env_remove("LINEAR_API_KEY")
-        .env("LINEAR_API_KEY", "")
+        .env_remove("LINEARS_API_KEY")
+        .env("LINEARS_API_KEY", "")
         .output()
         .expect("Failed to execute command");
 

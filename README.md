@@ -22,7 +22,7 @@ cd linears
 ./init.sh
 
 # Set your Linear API key
-export LINEAR_API_KEY='lin_api_...'
+export LINEARS_API_KEY='lin_api_...'
 
 # Explore available resources
 cargo run -- resources
@@ -39,7 +39,7 @@ cargo run -- get issue ENG-123
 ### Prerequisites
 
 - Rust toolchain (stable, 1.75+)
-- LINEAR_API_KEY environment variable
+- LINEARS_API_KEY environment variable
 
 ### Build from Source
 
@@ -169,8 +169,8 @@ Human-readable single-entity view.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `LINEAR_API_KEY` | Yes | Personal API key |
-| `LINEAR_ENDPOINT` | No | Override API endpoint |
+| `LINEARS_API_KEY` | Yes | Personal API key |
+| `LINEARS_ENDPOINT` | No | Override API endpoint |
 | `LINEARS_OUTPUT` | No | Default output format |
 | `LINEARS_WORKSPACE` | No | Workspace for multi-workspace keys |
 

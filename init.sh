@@ -54,16 +54,16 @@ check_requirements() {
 check_env() {
     log_info "Checking environment variables..."
 
-    if [[ -z "${LINEAR_API_KEY:-}" ]]; then
-        log_warn "LINEAR_API_KEY not set - required for API calls"
+    if [[ -z "${LINEARS_API_KEY:-}" ]]; then
+        log_warn "LINEARS_API_KEY not set - required for API calls"
         log_info "  Get your key from: https://linear.app/settings/api"
-        log_info "  Set with: export LINEAR_API_KEY='lin_api_...'"
+        log_info "  Set with: export LINEARS_API_KEY='lin_api_...'"
     else
-        log_success "LINEAR_API_KEY is set"
+        log_success "LINEARS_API_KEY is set"
     fi
 
-    if [[ -n "${LINEAR_ENDPOINT:-}" ]]; then
-        log_info "LINEAR_ENDPOINT override: $LINEAR_ENDPOINT"
+    if [[ -n "${LINEARS_ENDPOINT:-}" ]]; then
+        log_info "LINEARS_ENDPOINT override: $LINEARS_ENDPOINT"
     fi
 
     if [[ -n "${LINEARS_OUTPUT:-}" ]]; then
@@ -185,8 +185,8 @@ show_help() {
     echo "  help          Show this help message"
     echo ""
     echo "Environment Variables:"
-    echo "  LINEAR_API_KEY     Required for API calls (get from https://linear.app/settings/api)"
-    echo "  LINEAR_ENDPOINT    Override API endpoint (default: https://api.linear.app/graphql)"
+    echo "  LINEARS_API_KEY     Required for API calls (get from https://linear.app/settings/api)"
+    echo "  LINEARS_ENDPOINT    Override API endpoint (default: https://api.linear.app/graphql)"
     echo "  LINEARS_OUTPUT     Default output format: json|yaml|table|text|ndjson"
     echo "  LINEARS_WORKSPACE  Workspace slug/ID for multi-workspace API keys"
 }
@@ -241,7 +241,7 @@ main() {
             log_success "Setup complete!"
             echo ""
             echo "Next steps:"
-            echo "  1. Set LINEAR_API_KEY if not already set"
+            echo "  1. Set LINEARS_API_KEY if not already set"
             echo "  2. Run 'cargo run -- --help' to see available commands"
             echo "  3. Run 'cargo run -- resources' to see available resources"
             echo "  4. Run 'cargo run -- list issue' to list issues"
