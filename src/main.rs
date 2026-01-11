@@ -82,6 +82,9 @@ async fn main() -> ExitCode {
 
     let cli = Cli::parse();
 
+    // Set up color configuration
+    progress::set_no_color(cli.global.no_color);
+
     // Check for API key if command requires it
     if command_requires_api(&cli.command) {
         if let Err(msg) = get_api_key() {
