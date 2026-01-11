@@ -101,7 +101,12 @@ pub struct ErrorLocation {
 
 impl Client {
     /// Create a new client with the given API key
-    pub fn new(api_key: &str, endpoint: Option<&str>, timeout_secs: u64) -> Result<Self, ClientError> {
+    pub fn new(
+        api_key: &str,
+        endpoint: Option<&str>,
+        timeout_secs: u64,
+        workspace: Option<&str>,
+    ) -> Result<Self, ClientError> {
         let mut headers = HeaderMap::new();
         // Linear API expects the API key directly without Bearer prefix
         headers.insert(
@@ -110,6 +115,15 @@ impl Client {
                 .map_err(|e| ClientError::Auth(format!("Invalid API key format: {}", e)))?,
         );
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+
+        // Add workspace header if provided (for multi-workspace API keys)
+        if let Some(ws) = workspace {
+            headers.insert(
+                "Linear-Workspace",
+                HeaderValue::from_str(ws)
+                    .map_err(|e| ClientError::Auth(format!("Invalid workspace value: {}", e)))?,
+            );
+        }
 
         let http = reqwest::Client::builder()
             .default_headers(headers)

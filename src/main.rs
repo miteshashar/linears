@@ -305,6 +305,7 @@ async fn cmd_list(
         &api_key,
         cli.global.endpoint.as_deref(),
         cli.global.timeout,
+        cli.global.workspace.as_deref(),
     )?;
 
     let resource_name = resource.field_name();
@@ -493,6 +494,7 @@ async fn cmd_get(cli: &Cli, resource: generated::Resource, id: String) -> Result
         &api_key,
         cli.global.endpoint.as_deref(),
         cli.global.timeout,
+        cli.global.workspace.as_deref(),
     )?;
 
     // Build the query
@@ -568,6 +570,7 @@ async fn cmd_search(cli: &Cli, resource: generated::Resource, text: String) -> R
         &api_key,
         cli.global.endpoint.as_deref(),
         cli.global.timeout,
+        cli.global.workspace.as_deref(),
     )?;
 
     // Build the search query
@@ -657,6 +660,7 @@ async fn cmd_raw(cli: &Cli, query: String) -> Result<()> {
         &api_key,
         cli.global.endpoint.as_deref(),
         cli.global.timeout,
+        cli.global.workspace.as_deref(),
     )?;
 
     // Read query from file if it looks like a file path
@@ -717,6 +721,7 @@ async fn cmd_create(
         &api_key,
         cli.global.endpoint.as_deref(),
         cli.global.timeout,
+        cli.global.workspace.as_deref(),
     )?;
 
     // Parse the input
@@ -782,6 +787,7 @@ async fn cmd_update(
         &api_key,
         cli.global.endpoint.as_deref(),
         cli.global.timeout,
+        cli.global.workspace.as_deref(),
     )?;
 
     // Parse the input
@@ -841,6 +847,7 @@ async fn cmd_delete(cli: &Cli, resource: generated::Resource, id: String) -> Res
         &api_key,
         cli.global.endpoint.as_deref(),
         cli.global.timeout,
+        cli.global.workspace.as_deref(),
     )?;
 
     // Build the mutation
@@ -897,6 +904,7 @@ async fn cmd_archive(cli: &Cli, resource: generated::Resource, id: String) -> Re
         &api_key,
         cli.global.endpoint.as_deref(),
         cli.global.timeout,
+        cli.global.workspace.as_deref(),
     )?;
 
     // Build the mutation
@@ -953,6 +961,7 @@ async fn cmd_unarchive(cli: &Cli, resource: generated::Resource, id: String) -> 
         &api_key,
         cli.global.endpoint.as_deref(),
         cli.global.timeout,
+        cli.global.workspace.as_deref(),
     )?;
 
     // Build the mutation
@@ -1014,6 +1023,7 @@ async fn cmd_mutate(
         &api_key,
         cli.global.endpoint.as_deref(),
         cli.global.timeout,
+        cli.global.workspace.as_deref(),
     )?;
 
     // Parse variables

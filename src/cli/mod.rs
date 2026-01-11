@@ -44,6 +44,10 @@ pub struct GlobalOptions {
     /// Request timeout in seconds
     #[arg(long, default_value = "30")]
     pub timeout: u64,
+
+    /// Workspace slug or ID (for multi-workspace API keys)
+    #[arg(long, env = "LINEARS_WORKSPACE")]
+    pub workspace: Option<String>,
 }
 
 /// Output format options

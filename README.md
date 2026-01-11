@@ -135,6 +135,7 @@ linears mutate issueCreate --vars '{"input":{...}}'
 | `--verbose` / `-v` | Show GraphQL query |
 | `--endpoint URL` | Override API endpoint |
 | `--timeout SECS` | Request timeout |
+| `--workspace SLUG` | Workspace slug/ID for multi-workspace keys |
 
 ## Output Formats
 
