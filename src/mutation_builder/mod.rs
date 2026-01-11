@@ -35,16 +35,14 @@ pub fn build_create_mutation(
     input: serde_json::Value,
 ) -> (String, serde_json::Value) {
     let op_name = format!("{}Create", resource_name);
+    let entity_fields = get_mutation_fields(resource_name);
 
     let query = format!(
         r#"mutation {op}($input: {resource}CreateInput!) {{
   {op_camel}(input: $input) {{
     success
     {resource_lower} {{
-      id
-      ... on Issue {{ identifier title }}
-      ... on Team {{ name key }}
-      ... on Comment {{ body }}
+      {entity_fields}
     }}
   }}
 }}"#,
@@ -52,6 +50,7 @@ pub fn build_create_mutation(
         op_camel = to_camel_case(&op_name),
         resource = to_pascal_case(resource_name),
         resource_lower = resource_name,
+        entity_fields = entity_fields,
     );
 
     let variables = serde_json::json!({
@@ -68,16 +67,14 @@ pub fn build_update_mutation(
     input: serde_json::Value,
 ) -> (String, serde_json::Value) {
     let op_name = format!("{}Update", resource_name);
+    let entity_fields = get_mutation_fields(resource_name);
 
     let query = format!(
         r#"mutation {op}($id: String!, $input: {resource}UpdateInput!) {{
   {op_camel}(id: $id, input: $input) {{
     success
     {resource_lower} {{
-      id
-      ... on Issue {{ identifier title }}
-      ... on Team {{ name key }}
-      ... on Comment {{ body }}
+      {entity_fields}
     }}
   }}
 }}"#,
@@ -85,6 +82,7 @@ pub fn build_update_mutation(
         op_camel = to_camel_case(&op_name),
         resource = to_pascal_case(resource_name),
         resource_lower = resource_name,
+        entity_fields = entity_fields,
     );
 
     let variables = serde_json::json!({
@@ -182,5 +180,25 @@ fn to_camel_case(s: &str) -> String {
     match chars.next() {
         None => String::new(),
         Some(c) => c.to_lowercase().collect::<String>() + chars.as_str(),
+    }
+}
+
+/// Get the fields to select for a mutation response
+fn get_mutation_fields(resource_name: &str) -> &'static str {
+    match resource_name {
+        "issue" => "id identifier title",
+        "team" => "id name key",
+        "user" => "id name email",
+        "project" => "id name",
+        "cycle" => "id name number",
+        "issueLabel" => "id name color",
+        "comment" => "id body",
+        "workflowState" => "id name color",
+        "attachment" => "id title url",
+        "document" => "id title",
+        "roadmap" => "id name",
+        "initiative" => "id name",
+        "webhook" => "id url enabled",
+        _ => "id",
     }
 }

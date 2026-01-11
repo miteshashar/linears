@@ -362,37 +362,275 @@ async fn cmd_raw(_cli: &Cli, _query: String) -> Result<()> {
 }
 
 async fn cmd_create(
-    _cli: &Cli,
-    _resource: generated::Resource,
-    _input: cli::InputOptions,
+    cli: &Cli,
+    resource: generated::Resource,
+    input: cli::InputOptions,
 ) -> Result<()> {
-    // TODO: Implement create command
-    anyhow::bail!("Create command not yet implemented")
+    use client::{Client, GraphQLRequest};
+    use mutation_builder::build_create_mutation;
+    use validate::resolve_input;
+
+    // Get API key (already validated in main)
+    let api_key = get_api_key().expect("API key already validated");
+
+    // Create client
+    let client = Client::new(
+        &api_key,
+        cli.global.endpoint.as_deref(),
+        cli.global.timeout,
+    )?;
+
+    // Parse the input
+    let input_value = resolve_input(input.input.as_deref(), input.input_file.as_deref())?;
+
+    // Build the mutation
+    let (query, variables) = build_create_mutation(resource.field_name(), input_value);
+
+    if cli.global.verbose {
+        eprintln!("Query: {}", query);
+        eprintln!("Variables: {}", serde_json::to_string_pretty(&variables)?);
+    }
+
+    // Execute the mutation
+    let request = GraphQLRequest {
+        query,
+        variables: Some(variables),
+        operation_name: None,
+    };
+
+    let response = client.execute(request).await?;
+
+    // Render the response
+    match cli.global.output {
+        cli::OutputFormat::Json => {
+            if cli.global.pretty {
+                println!("{}", serde_json::to_string_pretty(&response.data)?);
+            } else {
+                println!("{}", serde_json::to_string(&response.data)?);
+            }
+        }
+        cli::OutputFormat::Yaml => {
+            println!("{}", serde_yaml::to_string(&response.data)?);
+        }
+        _ => {
+            println!("{}", serde_json::to_string_pretty(&response.data)?);
+        }
+    }
+
+    Ok(())
 }
 
 async fn cmd_update(
-    _cli: &Cli,
-    _resource: generated::Resource,
-    _id: String,
-    _set: cli::SetOptions,
+    cli: &Cli,
+    resource: generated::Resource,
+    id: String,
+    set: cli::SetOptions,
 ) -> Result<()> {
-    // TODO: Implement update command
-    anyhow::bail!("Update command not yet implemented")
+    use client::{Client, GraphQLRequest};
+    use mutation_builder::build_update_mutation;
+    use validate::resolve_input;
+
+    // Get API key (already validated in main)
+    let api_key = get_api_key().expect("API key already validated");
+
+    // Create client
+    let client = Client::new(
+        &api_key,
+        cli.global.endpoint.as_deref(),
+        cli.global.timeout,
+    )?;
+
+    // Parse the input
+    let input_value = resolve_input(set.set.as_deref(), set.set_file.as_deref())?;
+
+    // Build the mutation
+    let (query, variables) = build_update_mutation(resource.field_name(), &id, input_value);
+
+    if cli.global.verbose {
+        eprintln!("Query: {}", query);
+        eprintln!("Variables: {}", serde_json::to_string_pretty(&variables)?);
+    }
+
+    // Execute the mutation
+    let request = GraphQLRequest {
+        query,
+        variables: Some(variables),
+        operation_name: None,
+    };
+
+    let response = client.execute(request).await?;
+
+    // Render the response
+    match cli.global.output {
+        cli::OutputFormat::Json => {
+            if cli.global.pretty {
+                println!("{}", serde_json::to_string_pretty(&response.data)?);
+            } else {
+                println!("{}", serde_json::to_string(&response.data)?);
+            }
+        }
+        cli::OutputFormat::Yaml => {
+            println!("{}", serde_yaml::to_string(&response.data)?);
+        }
+        _ => {
+            println!("{}", serde_json::to_string_pretty(&response.data)?);
+        }
+    }
+
+    Ok(())
 }
 
-async fn cmd_delete(_cli: &Cli, _resource: generated::Resource, _id: String) -> Result<()> {
-    // TODO: Implement delete command
-    anyhow::bail!("Delete command not yet implemented")
+async fn cmd_delete(cli: &Cli, resource: generated::Resource, id: String) -> Result<()> {
+    use client::{Client, GraphQLRequest};
+    use mutation_builder::build_delete_mutation;
+
+    // Get API key (already validated in main)
+    let api_key = get_api_key().expect("API key already validated");
+
+    // Create client
+    let client = Client::new(
+        &api_key,
+        cli.global.endpoint.as_deref(),
+        cli.global.timeout,
+    )?;
+
+    // Build the mutation
+    let (query, variables) = build_delete_mutation(resource.field_name(), &id);
+
+    if cli.global.verbose {
+        eprintln!("Query: {}", query);
+        eprintln!("Variables: {}", serde_json::to_string_pretty(&variables)?);
+    }
+
+    // Execute the mutation
+    let request = GraphQLRequest {
+        query,
+        variables: Some(variables),
+        operation_name: None,
+    };
+
+    let response = client.execute(request).await?;
+
+    // Render the response
+    match cli.global.output {
+        cli::OutputFormat::Json => {
+            if cli.global.pretty {
+                println!("{}", serde_json::to_string_pretty(&response.data)?);
+            } else {
+                println!("{}", serde_json::to_string(&response.data)?);
+            }
+        }
+        cli::OutputFormat::Yaml => {
+            println!("{}", serde_yaml::to_string(&response.data)?);
+        }
+        _ => {
+            println!("{}", serde_json::to_string_pretty(&response.data)?);
+        }
+    }
+
+    Ok(())
 }
 
-async fn cmd_archive(_cli: &Cli, _resource: generated::Resource, _id: String) -> Result<()> {
-    // TODO: Implement archive command
-    anyhow::bail!("Archive command not yet implemented")
+async fn cmd_archive(cli: &Cli, resource: generated::Resource, id: String) -> Result<()> {
+    use client::{Client, GraphQLRequest};
+    use mutation_builder::build_archive_mutation;
+
+    // Get API key (already validated in main)
+    let api_key = get_api_key().expect("API key already validated");
+
+    // Create client
+    let client = Client::new(
+        &api_key,
+        cli.global.endpoint.as_deref(),
+        cli.global.timeout,
+    )?;
+
+    // Build the mutation
+    let (query, variables) = build_archive_mutation(resource.field_name(), &id);
+
+    if cli.global.verbose {
+        eprintln!("Query: {}", query);
+        eprintln!("Variables: {}", serde_json::to_string_pretty(&variables)?);
+    }
+
+    // Execute the mutation
+    let request = GraphQLRequest {
+        query,
+        variables: Some(variables),
+        operation_name: None,
+    };
+
+    let response = client.execute(request).await?;
+
+    // Render the response
+    match cli.global.output {
+        cli::OutputFormat::Json => {
+            if cli.global.pretty {
+                println!("{}", serde_json::to_string_pretty(&response.data)?);
+            } else {
+                println!("{}", serde_json::to_string(&response.data)?);
+            }
+        }
+        cli::OutputFormat::Yaml => {
+            println!("{}", serde_yaml::to_string(&response.data)?);
+        }
+        _ => {
+            println!("{}", serde_json::to_string_pretty(&response.data)?);
+        }
+    }
+
+    Ok(())
 }
 
-async fn cmd_unarchive(_cli: &Cli, _resource: generated::Resource, _id: String) -> Result<()> {
-    // TODO: Implement unarchive command
-    anyhow::bail!("Unarchive command not yet implemented")
+async fn cmd_unarchive(cli: &Cli, resource: generated::Resource, id: String) -> Result<()> {
+    use client::{Client, GraphQLRequest};
+    use mutation_builder::build_unarchive_mutation;
+
+    // Get API key (already validated in main)
+    let api_key = get_api_key().expect("API key already validated");
+
+    // Create client
+    let client = Client::new(
+        &api_key,
+        cli.global.endpoint.as_deref(),
+        cli.global.timeout,
+    )?;
+
+    // Build the mutation
+    let (query, variables) = build_unarchive_mutation(resource.field_name(), &id);
+
+    if cli.global.verbose {
+        eprintln!("Query: {}", query);
+        eprintln!("Variables: {}", serde_json::to_string_pretty(&variables)?);
+    }
+
+    // Execute the mutation
+    let request = GraphQLRequest {
+        query,
+        variables: Some(variables),
+        operation_name: None,
+    };
+
+    let response = client.execute(request).await?;
+
+    // Render the response
+    match cli.global.output {
+        cli::OutputFormat::Json => {
+            if cli.global.pretty {
+                println!("{}", serde_json::to_string_pretty(&response.data)?);
+            } else {
+                println!("{}", serde_json::to_string(&response.data)?);
+            }
+        }
+        cli::OutputFormat::Yaml => {
+            println!("{}", serde_yaml::to_string(&response.data)?);
+        }
+        _ => {
+            println!("{}", serde_json::to_string_pretty(&response.data)?);
+        }
+    }
+
+    Ok(())
 }
 
 async fn cmd_mutate(
