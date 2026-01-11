@@ -388,21 +388,53 @@ async fn cmd_search(cli: &Cli, resource: generated::Resource, text: String) -> R
 
     let response = client.execute(request).await?;
 
-    // Render the response
+    // Extract nodes from response
+    let data = response.data.unwrap_or_default();
+    let resource_name = resource.field_name();
+    let plural_name = query_builder::plural_field_name(resource_name);
+    let resource_data = &data[&plural_name];
+    let nodes = resource_data.get("nodes").cloned().unwrap_or_default();
+
+    // Render the response with proper envelope
     match cli.global.output {
         cli::OutputFormat::Json => {
+            let output = serde_json::json!({
+                "resource": resource_name,
+                "operation": "search",
+                "strategy": strategy.as_str(),
+                "nodes": nodes,
+            });
             if cli.global.pretty {
-                println!("{}", serde_json::to_string_pretty(&response.data)?);
+                println!("{}", serde_json::to_string_pretty(&output)?);
             } else {
-                println!("{}", serde_json::to_string(&response.data)?);
+                println!("{}", serde_json::to_string(&output)?);
             }
         }
         cli::OutputFormat::Yaml => {
-            println!("{}", serde_yaml::to_string(&response.data)?);
+            let output = serde_json::json!({
+                "resource": resource_name,
+                "operation": "search",
+                "strategy": strategy.as_str(),
+                "nodes": nodes,
+            });
+            println!("{}", serde_yaml::to_string(&output)?);
+        }
+        cli::OutputFormat::Ndjson => {
+            if let Some(arr) = nodes.as_array() {
+                for node in arr {
+                    println!("{}", serde_json::to_string(node)?);
+                }
+            }
         }
         _ => {
-            // For table/text/ndjson, just print JSON for now
-            println!("{}", serde_json::to_string_pretty(&response.data)?);
+            // For table/text, just print JSON for now
+            let output = serde_json::json!({
+                "resource": resource_name,
+                "operation": "search",
+                "strategy": strategy.as_str(),
+                "nodes": nodes,
+            });
+            println!("{}", serde_json::to_string_pretty(&output)?);
         }
     }
 
