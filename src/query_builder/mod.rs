@@ -313,7 +313,8 @@ fn to_pascal_case(s: &str) -> String {
     result
 }
 
-fn plural_field_name(field: &str) -> String {
+/// Convert a singular field name to its plural form for GraphQL queries
+pub fn plural_field_name(field: &str) -> String {
     // Simple pluralization - real impl would be more sophisticated
     if field.ends_with('s') {
         format!("{}es", field)

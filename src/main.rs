@@ -229,22 +229,57 @@ async fn cmd_list(
 
     let response = client.execute(request).await?;
 
-    // Render the response
+    // Extract nodes and pageInfo from response
+    let data = response.data.unwrap_or_default();
+    let resource_name = resource.field_name();
+    let plural_name = query_builder::plural_field_name(resource_name);
+
+    // Navigate to the resource data
+    let resource_data = &data[&plural_name];
+    let nodes = resource_data.get("nodes").cloned().unwrap_or_default();
+    let page_info = resource_data.get("pageInfo").cloned();
+
+    // Render the response with proper envelope
     match cli.global.output {
         cli::OutputFormat::Json => {
+            let output = serde_json::json!({
+                "resource": resource_name,
+                "operation": "list",
+                "pageInfo": page_info,
+                "nodes": nodes,
+            });
             if cli.global.pretty {
-                println!("{}", serde_json::to_string_pretty(&response.data)?);
+                println!("{}", serde_json::to_string_pretty(&output)?);
             } else {
-                println!("{}", serde_json::to_string(&response.data)?);
+                println!("{}", serde_json::to_string(&output)?);
             }
         }
         cli::OutputFormat::Yaml => {
-            println!("{}", serde_yaml::to_string(&response.data)?);
+            let output = serde_json::json!({
+                "resource": resource_name,
+                "operation": "list",
+                "pageInfo": page_info,
+                "nodes": nodes,
+            });
+            println!("{}", serde_yaml::to_string(&output)?);
+        }
+        cli::OutputFormat::Ndjson => {
+            if let Some(arr) = nodes.as_array() {
+                for node in arr {
+                    println!("{}", serde_json::to_string(node)?);
+                }
+            }
         }
         _ => {
-            // For table/text/ndjson, just print JSON for now
+            // For table/text, just print JSON for now
             // TODO: Implement proper table rendering
-            println!("{}", serde_json::to_string_pretty(&response.data)?);
+            let output = serde_json::json!({
+                "resource": resource_name,
+                "operation": "list",
+                "pageInfo": page_info,
+                "nodes": nodes,
+            });
+            println!("{}", serde_json::to_string_pretty(&output)?);
         }
     }
 
