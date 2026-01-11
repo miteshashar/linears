@@ -1,0 +1,26 @@
+---
+source: tests/snapshot_tests.rs
+expression: "plan_entries.join(\"\\n\")"
+---
+agentActivity: [agentSessionId, type]
+attachment: [title, url, subtitle]
+comment: [body]
+customView: [name, modelName]
+customer: [name, slackChannelId]
+customerStatus: [name, description, color]
+customerTier: [description, color, displayName]
+cycle: [name]
+document: [title, slugId]
+initiative: [name, activityType, health]
+issue: [title, description]
+issueLabel: [name]
+notification: [type]
+project: [name, activityType, health]
+projectLabel: [name]
+projectMilestone: [name]
+projectStatus: [name, description, type]
+projectUpdates: [health]
+roadmap: [name, slugId]
+team: [name, key, description]
+user: [name, email, displayName]
+workflowState: [name, description, type]

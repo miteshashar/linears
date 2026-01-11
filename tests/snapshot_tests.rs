@@ -3,10 +3,11 @@
 //! These tests verify that codegen output is stable and catch unintended changes.
 //! Run `cargo insta test` to review snapshots after changes.
 
-use linears::cli::{ListOptions, Preset};
-use linears::generated::{MutationOp, Resource};
+use linears::cli::ListOptions;
+use linears::common::FieldsetPreset;
+use linears::generated::{get_searchable_fields, supports_search, MutationOp, Resource};
 use linears::mutation_builder::build_mutation;
-use linears::query_builder::{build_get_query, build_list_query, build_search_query};
+use linears::query_builder::{build_get_query, build_list_query_with_filter, build_search_query};
 
 /// Snapshot all Resource enum variants
 #[test]
@@ -115,7 +116,7 @@ fn default_list_options() -> ListOptions {
         order_by: None,
         filter: None,
         filter_file: None,
-        preset: Preset::Default,
+        preset: FieldsetPreset::Default,
         select: None,
         expand: None,
     }
@@ -132,7 +133,7 @@ fn query_snapshot_list_resources() {
 
     let mut queries = Vec::new();
     for resource in resources {
-        let (query, _vars) = build_list_query(resource, &default_list_options());
+        let (query, _vars) = build_list_query_with_filter(resource, &default_list_options(), None);
         queries.push(format!("=== {} ===\n{}", resource.field_name(), query));
     }
 
@@ -198,4 +199,29 @@ fn mutation_snapshot_selected_ops() {
     }
 
     insta::assert_snapshot!("mutation_queries", queries.join("\n\n"));
+}
+
+// ============================================================================
+// Search Plan Snapshot (per PRD §10)
+// Documents which resources support search and their searchable fields.
+// ============================================================================
+
+/// Snapshot search plan: per-resource search support and searchable fields
+/// This fulfills PRD requirement for search_plan_snapshot
+#[test]
+fn search_plan_snapshot() {
+    let mut plan_entries = Vec::new();
+
+    for resource in Resource::all() {
+        if supports_search(*resource) {
+            let fields = get_searchable_fields(*resource);
+            plan_entries.push(format!(
+                "{}: [{}]",
+                resource.field_name(),
+                fields.join(", ")
+            ));
+        }
+    }
+
+    insta::assert_snapshot!("search_plan", plan_entries.join("\n"));
 }
