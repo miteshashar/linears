@@ -48,6 +48,9 @@ owo-colors = "4"
 # Environment
 dotenvy = "0.15"
 
+# Random number generation (for jitter in backoff)
+rand = "0.9"
+
 [dev-dependencies]
 # Testing
 tokio-test = "0.4"

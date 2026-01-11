@@ -1,9 +1,11 @@
 //! HTTP client for Linear's GraphQL API
 
+use rand::Rng;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use thiserror::Error;
+use tokio::time::sleep;
 
 /// Errors that can occur when using the Linear API client
 #[derive(Debug, Error)]
@@ -46,6 +48,11 @@ impl ClientError {
         }
     }
 }
+
+/// Retry configuration for 5xx errors
+const MAX_RETRIES: u32 = 10;
+const BASE_DELAY_MS: u64 = 100;
+const MAX_DELAY_MS: u64 = 30_000;
 
 /// GraphQL client for Linear API
 pub struct Client {
@@ -111,12 +118,43 @@ impl Client {
         Ok(Self { http, endpoint })
     }
 
-    /// Execute a GraphQL request
+    /// Execute a GraphQL request with automatic retries for 5xx errors
     pub async fn execute(&self, request: GraphQLRequest) -> Result<GraphQLResponse, ClientError> {
+        let mut retries = 0;
+
+        loop {
+            let result = self.execute_once(&request).await;
+
+            match result {
+                Ok(response) => return Ok(response),
+                Err(ClientError::Server(ref msg)) if retries < MAX_RETRIES => {
+                    // Retry on server errors with exponential backoff + jitter
+                    retries += 1;
+                    let base_delay = BASE_DELAY_MS * 2u64.pow(retries - 1);
+                    let jitter = rand::rng().random_range(0..=base_delay / 2);
+                    let delay = (base_delay + jitter).min(MAX_DELAY_MS);
+
+                    eprintln!(
+                        "Server error ({}), retrying in {}ms (attempt {}/{})",
+                        msg, delay, retries, MAX_RETRIES
+                    );
+
+                    sleep(Duration::from_millis(delay)).await;
+                }
+                Err(e) => {
+                    // Non-retryable error or max retries reached
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    /// Execute a single GraphQL request (no retries)
+    async fn execute_once(&self, request: &GraphQLRequest) -> Result<GraphQLResponse, ClientError> {
         let response = self
             .http
             .post(&self.endpoint)
-            .json(&request)
+            .json(request)
             .send()
             .await
             .map_err(|e| {
