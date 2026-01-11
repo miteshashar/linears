@@ -1,6 +1,7 @@
 {
-  "source": "https://github.com/linear/linear",
-  "commit": "abc123def456789",
-  "syncedAt": "2025-01-11T00:00:00Z",
-  "schemaVersion": "1.0.0"
+  "commit": "820405a1bb0ba7347425055cfde9bbe0fecf6d75",
+  "commitDate": "2026-01-07T16:53:51Z",
+  "permalink": "https://github.com/linear/linear/blob/820405a/packages/sdk/src/schema.graphql",
+  "source": "https://raw.githubusercontent.com/linear/linear/master/packages/sdk/src/schema.graphql",
+  "syncedAt": "2026-01-11T05:36:36.468865+00:00"
 }

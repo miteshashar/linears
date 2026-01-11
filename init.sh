@@ -134,7 +134,7 @@ run_lint() {
 sync_schema() {
     log_info "Syncing GraphQL schema from Linear SDK..."
 
-    if cargo xtask schema sync; then
+    if cargo run -p xtask -- schema sync; then
         log_success "Schema synced"
     else
         log_error "Schema sync failed"
@@ -146,7 +146,7 @@ sync_schema() {
 run_codegen() {
     log_info "Running code generation..."
 
-    if cargo xtask codegen; then
+    if cargo run -p xtask -- codegen; then
         log_success "Code generation complete"
     else
         log_error "Code generation failed"

@@ -3,12 +3,36 @@
 //! Run with: cargo xtask <command>
 
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand};
+use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
 
 const SCHEMA_URL: &str =
     "https://raw.githubusercontent.com/linear/linear/master/packages/sdk/src/schema.graphql";
+
+/// GitHub API URL to get commit info for the schema file
+const GITHUB_COMMITS_API: &str =
+    "https://api.github.com/repos/linear/linear/commits?path=packages/sdk/src/schema.graphql&per_page=1";
+
+/// GitHub commit response (simplified)
+#[derive(Deserialize)]
+struct GitHubCommit {
+    sha: String,
+    commit: CommitInfo,
+    html_url: String,
+}
+
+#[derive(Deserialize)]
+struct CommitInfo {
+    committer: CommitterInfo,
+}
+
+#[derive(Deserialize)]
+struct CommitterInfo {
+    date: String,
+}
 
 #[derive(Parser)]
 #[command(name = "xtask")]
@@ -62,7 +86,16 @@ fn sync_schema() -> Result<()> {
     println!("Fetching schema from Linear SDK...");
     println!("URL: {}", SCHEMA_URL);
 
-    let response = reqwest::blocking::get(SCHEMA_URL)
+    // Create HTTP client with user agent (required by GitHub API)
+    let client = reqwest::blocking::Client::builder()
+        .user_agent("linears-xtask/0.1.0")
+        .build()
+        .context("Failed to create HTTP client")?;
+
+    // Fetch the schema content
+    let response = client
+        .get(SCHEMA_URL)
+        .send()
         .context("Failed to fetch schema")?
         .text()
         .context("Failed to read schema response")?;
@@ -72,19 +105,53 @@ fn sync_schema() -> Result<()> {
     fs::write(&schema_path, &response).context("Failed to write schema file")?;
 
     println!("Schema written to: {}", schema_path.display());
+    println!("Schema size: {} bytes", response.len());
 
-    // Update metadata
+    // Fetch commit metadata from GitHub API
+    println!("\nFetching commit metadata from GitHub...");
+    let commits: Vec<GitHubCommit> = client
+        .get(GITHUB_COMMITS_API)
+        .send()
+        .context("Failed to fetch commit info from GitHub")?
+        .json()
+        .context("Failed to parse GitHub commit response")?;
+
+    let (commit_sha, commit_date, permalink) = if let Some(commit) = commits.first() {
+        let sha = commit.sha.clone();
+        let date = commit.commit.committer.date.clone();
+        // Create a proper permalink to the exact file version
+        let permalink = format!(
+            "https://github.com/linear/linear/blob/{}/packages/sdk/src/schema.graphql",
+            &sha[..7]
+        );
+        println!("  Commit: {}", &sha[..7]);
+        println!("  Date: {}", date);
+        (sha, date, permalink)
+    } else {
+        eprintln!("Warning: Could not fetch commit info, using fallback values");
+        let now = Utc::now().to_rfc3339();
+        (
+            "unknown".to_string(),
+            now.clone(),
+            SCHEMA_URL.to_string(),
+        )
+    };
+
+    // Update metadata with real commit info
+    let synced_at: DateTime<Utc> = Utc::now();
     let meta = serde_json::json!({
         "source": SCHEMA_URL,
-        "syncedAt": chrono::Utc::now().to_rfc3339(),
-        "note": "Schema synced from Linear SDK repository"
+        "commit": commit_sha,
+        "commitDate": commit_date,
+        "syncedAt": synced_at.to_rfc3339(),
+        "permalink": permalink
     });
 
     let meta_path = schema_dir().join("schema.meta.json");
     fs::write(&meta_path, serde_json::to_string_pretty(&meta)?)
         .context("Failed to write metadata")?;
 
-    println!("Metadata written to: {}", meta_path.display());
+    println!("\nMetadata written to: {}", meta_path.display());
     println!("Schema sync complete!");
 
     Ok(())
@@ -102,16 +169,32 @@ fn schema_info() -> Result<()> {
 
     println!("Schema Information:");
     println!("  Source: {}", meta["source"].as_str().unwrap_or("unknown"));
+
+    if let Some(commit) = meta["commit"].as_str() {
+        let short_sha = if commit.len() >= 7 { &commit[..7] } else { commit };
+        println!("  Commit: {}", short_sha);
+    }
+
+    if let Some(commit_date) = meta["commitDate"].as_str() {
+        println!("  Commit Date: {}", commit_date);
+    }
+
     println!(
         "  Synced At: {}",
         meta["syncedAt"].as_str().unwrap_or("unknown")
     );
+
+    if let Some(permalink) = meta["permalink"].as_str() {
+        println!("  Permalink: {}", permalink);
+    }
 
     let schema_path = schema_dir().join("schema.graphql");
     if schema_path.exists() {
         let content = fs::read_to_string(&schema_path)?;
         let lines = content.lines().count();
         println!("  Schema Lines: {}", lines);
+    } else {
+        println!("  Warning: schema.graphql not found!");
     }
 
     Ok(())
