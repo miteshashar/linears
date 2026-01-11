@@ -90,9 +90,10 @@ impl Client {
     /// Create a new client with the given API key
     pub fn new(api_key: &str, endpoint: Option<&str>, timeout_secs: u64) -> Result<Self, ClientError> {
         let mut headers = HeaderMap::new();
+        // Linear API expects the API key directly without Bearer prefix
         headers.insert(
             AUTHORIZATION,
-            HeaderValue::from_str(&format!("Bearer {}", api_key))
+            HeaderValue::from_str(api_key)
                 .map_err(|e| ClientError::Auth(format!("Invalid API key format: {}", e)))?,
         );
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));

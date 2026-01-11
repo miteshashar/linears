@@ -25,8 +25,9 @@ else
 fi
 
 # Verify the Authorization header format in the code
-echo -n "Test 2: Code uses Bearer token format... "
-if grep -q 'format!("Bearer {}", api_key)' src/client/mod.rs; then
+# Note: Linear API expects API key directly (no Bearer prefix)
+echo -n "Test 2: Code sets API key in Authorization header... "
+if grep -q 'HeaderValue::from_str(api_key)' src/client/mod.rs; then
     echo "PASS"
 else
     echo "FAIL (Authorization header format not found in code)"
