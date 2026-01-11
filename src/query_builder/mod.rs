@@ -71,9 +71,16 @@ pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, s
         )
     };
 
-    // Parse filter if provided
+    // Parse filter if provided (support stdin with '-')
     let filter_value: Option<serde_json::Value> = if let Some(ref filter) = options.filter {
-        validate::parse_input(filter).ok()
+        if filter == "-" {
+            // Read filter from stdin
+            validate::read_stdin()
+                .ok()
+                .and_then(|content| validate::parse_input(&content).ok())
+        } else {
+            validate::parse_input(filter).ok()
+        }
     } else if let Some(ref path) = options.filter_file {
         validate::read_file(path)
             .ok()
