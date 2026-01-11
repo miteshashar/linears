@@ -236,6 +236,9 @@ fn run_codegen() -> Result<()> {
     // Generate search plans
     generate_search_plans(&ast, &generated_dir)?;
 
+    // Generate mutation registry
+    generate_mutation_registry(&ast, &generated_dir)?;
+
     // Generate mod.rs
     generate_mod_rs(&generated_dir)?;
 
@@ -1001,16 +1004,210 @@ fn extract_input_type_name(ty: &graphql_parser::schema::Type<String>) -> String 
     }
 }
 
+/// Mutation info with its return entity type
+#[derive(Debug)]
+struct MutationInfo {
+    /// Operation name (e.g., "issueCreate")
+    op_name: String,
+    /// Entity field name in payload (e.g., "issue")
+    entity_field: Option<String>,
+    /// Entity type name (e.g., "Issue")
+    entity_type: Option<String>,
+}
+
+fn generate_mutation_registry(
+    ast: &graphql_parser::schema::Document<String>,
+    output_dir: &PathBuf,
+) -> Result<()> {
+    use graphql_parser::schema::{Definition, TypeDefinition};
+
+    // Build map of type name -> fields (for payload types)
+    let mut type_fields: HashMap<String, Vec<(String, String)>> = HashMap::new();
+
+    for def in &ast.definitions {
+        if let Definition::TypeDefinition(TypeDefinition::Object(obj)) = def {
+            let fields: Vec<(String, String)> = obj
+                .fields
+                .iter()
+                .map(|f| {
+                    let (type_name, _) = extract_type_info(&f.field_type);
+                    (f.name.clone(), type_name)
+                })
+                .collect();
+            type_fields.insert(obj.name.clone(), fields);
+        }
+    }
+
+    // Get all mutations and their return types
+    let mut mutations: Vec<MutationInfo> = Vec::new();
+
+    for def in &ast.definitions {
+        if let Definition::TypeDefinition(TypeDefinition::Object(obj)) = def {
+            if obj.name == "Mutation" {
+                for field in &obj.fields {
+                    if field.name.starts_with("_") {
+                        continue;
+                    }
+
+                    let (return_type, _) = extract_type_info(&field.field_type);
+
+                    // Try to find entity field in payload type
+                    let mut entity_field = None;
+                    let mut entity_type = None;
+
+                    if let Some(payload_fields) = type_fields.get(&return_type) {
+                        // Look for entity field (not success, lastSyncId, or archived)
+                        for (field_name, field_type) in payload_fields {
+                            if field_name != "success"
+                                && field_name != "lastSyncId"
+                                && field_name != "entity"
+                                && !field_name.ends_with("Payload")
+                            {
+                                // Check if this is a real entity type (has 'id' field)
+                                if let Some(type_fields) = type_fields.get(field_type) {
+                                    if type_fields.iter().any(|(name, _)| name == "id") {
+                                        entity_field = Some(field_name.clone());
+                                        entity_type = Some(field_type.clone());
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    mutations.push(MutationInfo {
+                        op_name: field.name.clone(),
+                        entity_field,
+                        entity_type,
+                    });
+                }
+            }
+        }
+    }
+
+    mutations.sort_by(|a, b| a.op_name.cmp(&b.op_name));
+
+    // Generate mutation_registry.rs
+    let mut code = String::from(
+        r#"//! Generated mutation registry - DO NOT EDIT
+//! Run `cargo xtask codegen` to regenerate
+
+use super::MutationOp;
+
+/// Get the entity field name for a mutation's payload (e.g., "issue" for IssuePayload)
+pub fn get_mutation_entity_field(op: MutationOp) -> Option<&'static str> {
+    match op {
+"#,
+    );
+
+    // Generate entity field match arms
+    for mutation in &mutations {
+        let variant = to_pascal_case(&mutation.op_name);
+        if let Some(ref field) = mutation.entity_field {
+            code.push_str(&format!(
+                "        MutationOp::{} => Some(\"{}\"),\n",
+                variant, field
+            ));
+        }
+    }
+
+    code.push_str(
+        r#"        _ => None,
+    }
+}
+
+/// Get the result fields to select for a mutation based on the entity type.
+/// Returns appropriate fields for the entity returned by the mutation.
+pub fn get_mutation_result_fields(resource_name: &str) -> &'static str {
+    match resource_name {
+"#,
+    );
+
+    // Build a set of unique entity types
+    let mut entity_types: Vec<(String, String)> = Vec::new();
+    for mutation in &mutations {
+        if let (Some(field), Some(type_name)) = (&mutation.entity_field, &mutation.entity_type) {
+            // Check if we already have this field -> type mapping
+            if !entity_types.iter().any(|(f, _)| f == field) {
+                entity_types.push((field.clone(), type_name.clone()));
+            }
+        }
+    }
+
+    // Generate result fields for each entity type
+    for (field_name, type_name) in &entity_types {
+        // Use minimal field set for mutations - just key identifying fields
+        let fields = get_minimal_entity_fields(type_name, &type_fields);
+        code.push_str(&format!(
+            "        \"{}\" => \"{}\",\n",
+            field_name, fields
+        ));
+    }
+
+    code.push_str(
+        r#"        _ => "id",
+    }
+}
+
+/// Check if a mutation returns an entity (vs just success status)
+pub fn mutation_returns_entity(op: MutationOp) -> bool {
+    get_mutation_entity_field(op).is_some()
+}
+"#,
+    );
+
+    fs::write(output_dir.join("mutation_registry.rs"), code)?;
+    println!(
+        "  Generated mutation_registry.rs ({} mutations)",
+        mutations.len()
+    );
+
+    Ok(())
+}
+
+/// Get minimal entity fields for mutation results
+fn get_minimal_entity_fields(type_name: &str, type_fields: &HashMap<String, Vec<(String, String)>>) -> String {
+    let mut result = vec!["id".to_string()];
+
+    // Name-like fields in order of preference
+    let name_fields = ["identifier", "title", "name", "key", "number", "url", "body", "email"];
+
+    if let Some(fields) = type_fields.get(type_name) {
+        // Find first name-like field that exists and is scalar
+        for name_field in name_fields {
+            if fields.iter().any(|(name, type_name)| {
+                name == name_field && is_scalar_type(type_name)
+            }) {
+                result.push(name_field.to_string());
+                break;
+            }
+        }
+
+        // Also add a second identifier if present (like title for issues)
+        if result.len() == 2 && result[1] == "identifier" {
+            if fields.iter().any(|(name, type_name)| name == "title" && is_scalar_type(type_name)) {
+                result.push("title".to_string());
+            }
+        }
+    }
+
+    result.join(" ")
+}
+
 fn generate_mod_rs(output_dir: &PathBuf) -> Result<()> {
     let code = r#"//! Generated code - DO NOT EDIT
 //! Run `cargo xtask codegen` to regenerate
 
 mod mutation_ops;
+mod mutation_registry;
 mod registry;
 mod resources;
 mod search_plan;
 
 pub use mutation_ops::MutationOp;
+pub use mutation_registry::{
+    get_mutation_entity_field, get_mutation_result_fields, mutation_returns_entity,
+};
 pub use registry::{
     get_default_fields, get_entity_fields, get_minimal_fields, get_preset_fields,
     get_relation_fields, get_wide_fields, FieldPreset,

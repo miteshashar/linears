@@ -1,6 +1,6 @@
 //! Mutation construction for create, update, delete, and archive operations
 
-use crate::generated::MutationOp;
+use crate::generated::{get_mutation_result_fields, MutationOp};
 
 /// Build a mutation query for any operation
 pub fn build_mutation(
@@ -11,7 +11,7 @@ pub fn build_mutation(
 
     // Extract resource name from operation (e.g., issueCreate -> issue)
     let resource_name = extract_resource_name(op_name);
-    let entity_fields = get_mutation_fields(&resource_name);
+    let entity_fields = get_mutation_result_fields(&resource_name);
 
     // Determine if this is a delete/archive operation (no entity returned)
     let is_status_only = op_name.ends_with("Delete") || op_name.ends_with("Archive") || op_name.ends_with("Unarchive");
@@ -69,7 +69,7 @@ pub fn build_create_mutation(
     input: serde_json::Value,
 ) -> (String, serde_json::Value) {
     let op_name = format!("{}Create", resource_name);
-    let entity_fields = get_mutation_fields(resource_name);
+    let entity_fields = get_mutation_result_fields(resource_name);
 
     let query = format!(
         r#"mutation {op}($input: {resource}CreateInput!) {{
@@ -101,7 +101,7 @@ pub fn build_update_mutation(
     input: serde_json::Value,
 ) -> (String, serde_json::Value) {
     let op_name = format!("{}Update", resource_name);
-    let entity_fields = get_mutation_fields(resource_name);
+    let entity_fields = get_mutation_result_fields(resource_name);
 
     let query = format!(
         r#"mutation {op}($id: String!, $input: {resource}UpdateInput!) {{
@@ -217,22 +217,5 @@ fn to_camel_case(s: &str) -> String {
     }
 }
 
-/// Get the fields to select for a mutation response
-fn get_mutation_fields(resource_name: &str) -> &'static str {
-    match resource_name {
-        "issue" => "id identifier title",
-        "team" => "id name key",
-        "user" => "id name email",
-        "project" => "id name",
-        "cycle" => "id name number",
-        "issueLabel" => "id name color",
-        "comment" => "id body",
-        "workflowState" => "id name color",
-        "attachment" => "id title url",
-        "document" => "id title",
-        "roadmap" => "id name",
-        "initiative" => "id name",
-        "webhook" => "id url enabled",
-        _ => "id",
-    }
-}
+// Note: get_mutation_result_fields is now imported from crate::generated::mutation_registry
+// as get_mutation_result_fields
