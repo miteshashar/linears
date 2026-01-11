@@ -114,51 +114,94 @@ async fn main() -> ExitCode {
         Ok(()) => ExitCode::from(exit_codes::SUCCESS),
         Err(e) => {
             // Check if the error is a ClientError to get the right exit code
-            let (exit_code, error_kind, error_message) =
+            let (exit_code, error_kind, error_message, hint, graphql_errors, details) =
                 if let Some(client_err) = e.downcast_ref::<client::ClientError>() {
                     let kind = match client_err {
                         client::ClientError::Auth(_) => "auth",
                         client::ClientError::Network(_) => "network",
-                        client::ClientError::GraphQL(_) => "graphql",
+                        client::ClientError::GraphQL(_, _) => "graphql",
                         client::ClientError::RateLimited(_) => "rate_limited",
                         client::ClientError::RateLimitedTooLong(_) => "rate_limited",
                         client::ClientError::Server(_) => "server",
                         client::ClientError::Other(_) => "other",
                     };
-                    (client_err.exit_code(), kind, format!("{}", client_err))
+                    let hint = client_err.hint();
+
+                    // Extract GraphQL errors and details if present
+                    let (graphql_errors, details) = match client_err {
+                        client::ClientError::GraphQL(_, Some(errors)) => {
+                            // Extract details from first error's extensions if present
+                            let details = errors
+                                .first()
+                                .and_then(|e| e.extensions.clone());
+                            (Some(errors.clone()), details)
+                        }
+                        _ => (None, None),
+                    };
+
+                    (client_err.exit_code(), kind, format!("{}", client_err), hint, graphql_errors, details)
                 } else {
-                    (exit_codes::GENERAL_ERROR, "general", format!("{:#}", e))
+                    (exit_codes::GENERAL_ERROR, "general", format!("{:#}", e), None, None, None)
                 };
 
             // Render error based on output format
             match cli.global.output {
                 cli::OutputFormat::Json => {
-                    let error_output = serde_json::json!({
-                        "error": {
-                            "kind": error_kind,
-                            "message": error_message,
-                        }
+                    let mut error_obj = serde_json::json!({
+                        "kind": error_kind,
+                        "message": error_message,
                     });
+
+                    // Add optional fields per PRD spec
+                    if let Some(h) = hint {
+                        error_obj["hint"] = serde_json::json!(h);
+                    }
+                    if let Some(d) = &details {
+                        error_obj["details"] = d.clone();
+                    }
+
+                    let mut output = serde_json::json!({ "error": error_obj });
+
+                    // Add graphqlErrors array if present
+                    if let Some(errors) = &graphql_errors {
+                        output["graphqlErrors"] = serde_json::to_value(errors).unwrap_or_default();
+                    }
+
                     eprintln!(
                         "{}",
                         if cli.global.pretty {
-                            serde_json::to_string_pretty(&error_output).unwrap_or_default()
+                            serde_json::to_string_pretty(&output).unwrap_or_default()
                         } else {
-                            serde_json::to_string(&error_output).unwrap_or_default()
+                            serde_json::to_string(&output).unwrap_or_default()
                         }
                     );
                 }
                 cli::OutputFormat::Yaml => {
-                    let error_output = serde_json::json!({
-                        "error": {
-                            "kind": error_kind,
-                            "message": error_message,
-                        }
+                    let mut error_obj = serde_json::json!({
+                        "kind": error_kind,
+                        "message": error_message,
                     });
-                    eprintln!("{}", serde_yaml::to_string(&error_output).unwrap_or_default());
+
+                    if let Some(h) = hint {
+                        error_obj["hint"] = serde_json::json!(h);
+                    }
+                    if let Some(d) = &details {
+                        error_obj["details"] = d.clone();
+                    }
+
+                    let mut output = serde_json::json!({ "error": error_obj });
+
+                    if let Some(errors) = &graphql_errors {
+                        output["graphqlErrors"] = serde_json::to_value(errors).unwrap_or_default();
+                    }
+
+                    eprintln!("{}", serde_yaml::to_string(&output).unwrap_or_default());
                 }
                 _ => {
                     eprintln!("Error: {}", error_message);
+                    if let Some(h) = hint {
+                        eprintln!("Hint: {}", h);
+                    }
                 }
             }
             ExitCode::from(exit_code)

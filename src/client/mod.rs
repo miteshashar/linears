@@ -20,8 +20,9 @@ pub enum ClientError {
     Network(String),
 
     /// GraphQL error from Linear (exit code 4)
+    /// Contains the error message and optionally the raw GraphQL errors for debugging
     #[error("GraphQL error: {0}")]
-    GraphQL(String),
+    GraphQL(String, Option<Vec<GraphQLError>>),
 
     /// Rate limited (retriable - wait time ≤60s)
     #[error("Rate limited: {0}")]
@@ -46,11 +47,24 @@ impl ClientError {
         match self {
             ClientError::Auth(_) => 2,
             ClientError::Network(_) => 3,
-            ClientError::GraphQL(_) => 4,
+            ClientError::GraphQL(_, _) => 4,
             ClientError::RateLimited(_) => 1,
             ClientError::RateLimitedTooLong(_) => 1,
             ClientError::Server(_) => 1,
             ClientError::Other(_) => 1,
+        }
+    }
+
+    /// Get a helpful hint for this error
+    pub fn hint(&self) -> Option<&'static str> {
+        match self {
+            ClientError::Auth(_) => Some("Check that LINEARS_API_KEY is set correctly"),
+            ClientError::Network(_) => Some("Check your network connection"),
+            ClientError::RateLimited(_) | ClientError::RateLimitedTooLong(_) => {
+                Some("The API is rate-limiting your requests. Wait and try again")
+            }
+            ClientError::Server(_) => Some("Linear is experiencing issues. Try again later"),
+            _ => None,
         }
     }
 }
@@ -84,16 +98,19 @@ pub struct GraphQLResponse {
 }
 
 /// GraphQL error
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct GraphQLError {
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub locations: Option<Vec<ErrorLocation>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<Vec<serde_json::Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub extensions: Option<serde_json::Value>,
 }
 
 /// Error location in query
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ErrorLocation {
     pub line: i32,
     pub column: i32,
@@ -235,7 +252,7 @@ impl Client {
             .map_err(|e| ClientError::Other(format!("Failed to parse response: {}", e)))?;
 
         // Check for GraphQL errors in the response
-        if let Some(errors) = &body.errors {
+        if let Some(errors) = body.errors.clone() {
             if !errors.is_empty() {
                 let messages: Vec<&str> = errors.iter().map(|e| e.message.as_str()).collect();
                 // Check if any error is authentication related
@@ -247,7 +264,7 @@ impl Client {
                         return Err(ClientError::Auth(msg.to_string()));
                     }
                 }
-                return Err(ClientError::GraphQL(messages.join("; ")));
+                return Err(ClientError::GraphQL(messages.join("; "), Some(errors)));
             }
         }
 
