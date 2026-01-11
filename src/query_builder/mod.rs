@@ -16,10 +16,11 @@ pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, s
     // Check if filter is provided
     let has_filter = options.filter.is_some() || options.filter_file.is_some();
 
+    // Build query with appropriate parameters
     let query = if has_filter {
         format!(
-            r#"query List{resource}($first: Int, $after: String, $last: Int, $before: String, $filter: {resource}Filter) {{
-  {field}(first: $first, after: $after, last: $last, before: $before, filter: $filter) {{
+            r#"query List{resource}($first: Int, $after: String, $last: Int, $before: String, $filter: {resource}Filter, $includeArchived: Boolean) {{
+  {field}(first: $first, after: $after, last: $last, before: $before, filter: $filter, includeArchived: $includeArchived) {{
     pageInfo {{
       hasNextPage
       hasPreviousPage
@@ -37,8 +38,8 @@ pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, s
         )
     } else {
         format!(
-            r#"query List{resource}($first: Int, $after: String, $last: Int, $before: String) {{
-  {field}(first: $first, after: $after, last: $last, before: $before) {{
+            r#"query List{resource}($first: Int, $after: String, $last: Int, $before: String, $includeArchived: Boolean) {{
+  {field}(first: $first, after: $after, last: $last, before: $before, includeArchived: $includeArchived) {{
     pageInfo {{
       hasNextPage
       hasPreviousPage
@@ -67,12 +68,20 @@ pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, s
         None
     };
 
+    // Only include includeArchived if it's true
+    let include_archived: Option<bool> = if options.include_archived {
+        Some(true)
+    } else {
+        None
+    };
+
     let variables = serde_json::json!({
         "first": options.first,
         "after": options.after,
         "last": options.last,
         "before": options.before,
         "filter": filter_value,
+        "includeArchived": include_archived,
     });
 
     (query, variables)
