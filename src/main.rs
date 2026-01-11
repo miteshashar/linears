@@ -110,13 +110,52 @@ async fn main() -> ExitCode {
         Ok(()) => ExitCode::from(exit_codes::SUCCESS),
         Err(e) => {
             // Check if the error is a ClientError to get the right exit code
-            let exit_code = if let Some(client_err) = e.downcast_ref::<client::ClientError>() {
-                eprintln!("Error: {}", client_err);
-                client_err.exit_code()
-            } else {
-                eprintln!("Error: {:#}", e);
-                exit_codes::GENERAL_ERROR
-            };
+            let (exit_code, error_kind, error_message) =
+                if let Some(client_err) = e.downcast_ref::<client::ClientError>() {
+                    let kind = match client_err {
+                        client::ClientError::Auth(_) => "auth",
+                        client::ClientError::Network(_) => "network",
+                        client::ClientError::GraphQL(_) => "graphql",
+                        client::ClientError::RateLimited(_) => "rate_limited",
+                        client::ClientError::Server(_) => "server",
+                        client::ClientError::Other(_) => "other",
+                    };
+                    (client_err.exit_code(), kind, format!("{}", client_err))
+                } else {
+                    (exit_codes::GENERAL_ERROR, "general", format!("{:#}", e))
+                };
+
+            // Render error based on output format
+            match cli.global.output {
+                cli::OutputFormat::Json => {
+                    let error_output = serde_json::json!({
+                        "error": {
+                            "kind": error_kind,
+                            "message": error_message,
+                        }
+                    });
+                    eprintln!(
+                        "{}",
+                        if cli.global.pretty {
+                            serde_json::to_string_pretty(&error_output).unwrap_or_default()
+                        } else {
+                            serde_json::to_string(&error_output).unwrap_or_default()
+                        }
+                    );
+                }
+                cli::OutputFormat::Yaml => {
+                    let error_output = serde_json::json!({
+                        "error": {
+                            "kind": error_kind,
+                            "message": error_message,
+                        }
+                    });
+                    eprintln!("{}", serde_yaml::to_string(&error_output).unwrap_or_default());
+                }
+                _ => {
+                    eprintln!("Error: {}", error_message);
+                }
+            }
             ExitCode::from(exit_code)
         }
     }
