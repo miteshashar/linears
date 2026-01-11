@@ -10,8 +10,14 @@ pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, s
     let field_name = resource.field_name();
     let plural_name = plural_field_name(field_name);
 
-    // Get fields for this specific resource type based on preset
-    let node_fields = get_resource_fields_for_preset(resource, options.preset);
+    // Get fields - use --select if provided, otherwise use preset
+    let node_fields: std::borrow::Cow<str> = if let Some(ref select) = options.select {
+        // User specified exact fields with --select
+        std::borrow::Cow::Owned(select.replace(',', " "))
+    } else {
+        // Use preset-based fields
+        std::borrow::Cow::Borrowed(get_resource_fields_for_preset(resource, options.preset))
+    };
 
     // Check if filter is provided
     let has_filter = options.filter.is_some() || options.filter_file.is_some();
