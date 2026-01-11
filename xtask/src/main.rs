@@ -239,6 +239,9 @@ fn run_codegen() -> Result<()> {
     // Generate mutation registry
     generate_mutation_registry(&ast, &generated_dir)?;
 
+    // Generate order_by enum
+    generate_order_by(&ast, &generated_dir)?;
+
     // Generate mod.rs
     generate_mod_rs(&generated_dir)?;
 
@@ -1194,12 +1197,93 @@ fn get_minimal_entity_fields(type_name: &str, type_fields: &HashMap<String, Vec<
     result.join(" ")
 }
 
+fn generate_order_by(
+    ast: &graphql_parser::schema::Document<String>,
+    output_dir: &PathBuf,
+) -> Result<()> {
+    use graphql_parser::schema::{Definition, TypeDefinition};
+
+    // Find PaginationOrderBy enum
+    let mut order_by_values: Vec<String> = Vec::new();
+
+    for def in &ast.definitions {
+        if let Definition::TypeDefinition(TypeDefinition::Enum(enum_def)) = def {
+            if enum_def.name == "PaginationOrderBy" {
+                for value in &enum_def.values {
+                    order_by_values.push(value.name.clone());
+                }
+            }
+        }
+    }
+
+    // Generate order_by.rs
+    let mut code = String::from(
+        r#"//! Generated order_by enum - DO NOT EDIT
+//! Run `cargo xtask codegen` to regenerate
+
+use clap::ValueEnum;
+use std::fmt;
+
+/// Pagination order by field
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum OrderBy {
+"#,
+    );
+
+    // Generate enum variants
+    for value in &order_by_values {
+        let variant = to_pascal_case(value);
+        code.push_str(&format!("    /// Order by {}\n", value));
+        code.push_str(&format!("    {},\n", variant));
+    }
+
+    code.push_str(
+        r#"}
+
+impl OrderBy {
+    /// Get the GraphQL value for this order by field
+    pub fn as_graphql_value(&self) -> &'static str {
+        match self {
+"#,
+    );
+
+    for value in &order_by_values {
+        let variant = to_pascal_case(value);
+        code.push_str(&format!(
+            "            OrderBy::{} => \"{}\",\n",
+            variant, value
+        ));
+    }
+
+    code.push_str(
+        r#"        }
+    }
+}
+
+impl fmt::Display for OrderBy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_graphql_value())
+    }
+}
+"#,
+    );
+
+    fs::write(output_dir.join("order_by.rs"), code)?;
+    println!(
+        "  Generated order_by.rs ({} order by values)",
+        order_by_values.len()
+    );
+
+    Ok(())
+}
+
 fn generate_mod_rs(output_dir: &PathBuf) -> Result<()> {
     let code = r#"//! Generated code - DO NOT EDIT
 //! Run `cargo xtask codegen` to regenerate
 
 mod mutation_ops;
 mod mutation_registry;
+mod order_by;
 mod registry;
 mod resources;
 mod search_plan;
@@ -1208,6 +1292,7 @@ pub use mutation_ops::MutationOp;
 pub use mutation_registry::{
     get_mutation_entity_field, get_mutation_result_fields, mutation_returns_entity,
 };
+pub use order_by::OrderBy;
 pub use registry::{
     get_default_fields, get_entity_fields, get_minimal_fields, get_preset_fields,
     get_relation_fields, get_wide_fields, FieldPreset,

@@ -33,11 +33,54 @@ pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, s
     // Check if filter is provided
     let has_filter = options.filter.is_some() || options.filter_file.is_some();
 
+    // Check if orderBy is provided
+    let has_order_by = options.order_by.is_some();
+
     // Build query with appropriate parameters
     let query = if has_filter {
-        format!(
-            r#"query List{resource}($first: Int, $after: String, $last: Int, $before: String, $filter: {resource}Filter, $includeArchived: Boolean) {{
+        if has_order_by {
+            format!(
+                r#"query List{resource}($first: Int, $after: String, $last: Int, $before: String, $filter: {resource}Filter, $includeArchived: Boolean, $orderBy: PaginationOrderBy) {{
+  {field}(first: $first, after: $after, last: $last, before: $before, filter: $filter, includeArchived: $includeArchived, orderBy: $orderBy) {{
+    pageInfo {{
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }}
+    nodes {{
+      {node_fields}
+    }}
+  }}
+}}"#,
+                resource = to_pascal_case(field_name),
+                field = plural_name,
+                node_fields = node_fields,
+            )
+        } else {
+            format!(
+                r#"query List{resource}($first: Int, $after: String, $last: Int, $before: String, $filter: {resource}Filter, $includeArchived: Boolean) {{
   {field}(first: $first, after: $after, last: $last, before: $before, filter: $filter, includeArchived: $includeArchived) {{
+    pageInfo {{
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }}
+    nodes {{
+      {node_fields}
+    }}
+  }}
+}}"#,
+                resource = to_pascal_case(field_name),
+                field = plural_name,
+                node_fields = node_fields,
+            )
+        }
+    } else if has_order_by {
+        format!(
+            r#"query List{resource}($first: Int, $after: String, $last: Int, $before: String, $includeArchived: Boolean, $orderBy: PaginationOrderBy) {{
+  {field}(first: $first, after: $after, last: $last, before: $before, includeArchived: $includeArchived, orderBy: $orderBy) {{
     pageInfo {{
       hasNextPage
       hasPreviousPage
@@ -99,6 +142,9 @@ pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, s
         None
     };
 
+    // Convert OrderBy to GraphQL enum value
+    let order_by_value: Option<&str> = options.order_by.as_ref().map(|o| o.as_graphql_value());
+
     let variables = serde_json::json!({
         "first": options.first,
         "after": options.after,
@@ -106,6 +152,7 @@ pub fn build_list_query(resource: Resource, options: &ListOptions) -> (String, s
         "before": options.before,
         "filter": filter_value,
         "includeArchived": include_archived,
+        "orderBy": order_by_value,
     });
 
     (query, variables)

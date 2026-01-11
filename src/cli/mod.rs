@@ -2,7 +2,7 @@
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
-use crate::generated::{MutationOp, Resource};
+use crate::generated::{MutationOp, OrderBy, Resource};
 
 /// Schema metadata embedded at compile time
 const SCHEMA_META: &str = include_str!("../../schemas/linear/schema.meta.json");
@@ -234,9 +234,9 @@ pub struct ListOptions {
     #[arg(long)]
     pub include_archived: bool,
 
-    /// Sort order
-    #[arg(long)]
-    pub order_by: Option<String>,
+    /// Sort order (createdAt or updatedAt)
+    #[arg(long, value_enum)]
+    pub order_by: Option<OrderBy>,
 
     /// Inline filter expression (JSON or YAML)
     #[arg(long)]
