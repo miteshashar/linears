@@ -2,6 +2,8 @@
 
 A Rust CLI providing complete coverage of Linear's GraphQL API.
 
+> **Work in Progress**: This project is under active development and may have breaking changes. Feedback welcome - feel free to try it out and open an issue if you run into problems or have suggestions.
+
 ## Features
 
 - **Complete API coverage**: 140 query resources, 330+ mutations
