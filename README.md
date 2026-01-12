@@ -174,6 +174,11 @@ linears schema info    # View schema version and stats
 linears schema diff    # Compare local vs upstream
 ```
 
+## Roadmap
+
+- **Saved queries**: Save and reuse GraphQL queries for repeated workflows
+- **Shell completions**: Tab completion for bash, zsh, fish, powershell
+
 ## Development
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for build, test, and contribution guide.
